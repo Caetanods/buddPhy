@@ -1,0 +1,264 @@
+## Daniel Caetano - March 19, 2020
+## These are a collection of functions to simulate trait evolution under budding.
+## These functions are based on Liam's code for stochastic mapping in phytools.
+
+## How should we compute the chunk length? Chunk length is only necessary for models with some age_fn. If Q is constant, then we can use the exp to get the waiting time until the next event (just like a standard MK model). If Q is going to change at each chunk following some age_fn, then we need to simulate the trait at time t after delta_t. Meaning that each chunk will be the branch between two pseudo-nodes and will have some rate multiplier applied to that chunk (controlled by the age_fn).
+
+## #######################################################
+## EXPANDING THE FUNCTION
+## The function can have a budding process that will control how the trait changes when a budding speciation happens. If we have a binary trait, like here, this is not necessary because the change will always go to the other trait.
+## The type of decay function and/or increase in rate of trait evolution with lineage-age can be expanded. Here I will create one function for each type of lineage-age relationship. It is simpler.
+## Need to add a probability of autocorrelation among the budding events. How likely is a budding event to follow another one.
+
+## Function to simulate discrete traits under budding speciation.
+## Multiple factors control the simulation and the probability of budding.
+## Function keeps track of the ancestral and descendant lineages.
+## Ideally we want a general function that can take any age function to make the simulation.
+## Here we implemented an exponential decay function with the "decay_rate" parameter. This simulates an exponential negative relationship between lineage-age and the rate of trait evolution.
+
+#' Simulate discrete trait evolution with budding and exponential decay function.
+#'
+#' This function adds a probability of budding speciation and allows only for a negative relationship between rates of trait evolution and lineage-age. Function also allows for cladogenetic change in the trait (a deterministic change in the state of the trait after budding speciation happens).
+#' @param tree phylogeny with branch lengths.
+#' @param Q transition matrix for a Markov model.
+#' @param anc state at the root. If "NULL", then a random state is selected.
+#' @param budding_prob probability that the speciation event was budding.
+#' @param decay_rate the rate for an exponential reduction of the rate of trait evolution proportional to lineage-age.
+#' @param cladogenetic_change if the state of the budding lineage should be distinct from the ancestral lineage (TRUE or FALSE).
+#'
+#' @return A list with simmap, tip_state, edge_state, ancestry, rate_scaler, and scaler_mat.
+#' @export
+#' @importFrom ape vcv.phylo reorder.phylo
+sim_Mk_budding_exp_decay <- function(tree, Q, anc = NULL, budding_prob = 0.0, decay_rate = 2.0, cladogenetic_change = TRUE){
+
+	## tree: a phylogeny with branch lengths.
+	## Q: a transition matrix, with colnames the states.
+	## budding_prob: The probability (0.0 to 1.0) that a given node has a budding speciation.
+	##                 If set to 0.0, then none of the speciation events will be budding. If set to 1.0, then all will be.
+	## anc: Set the root state for the simulation.
+	## decay_rate: Exponential decay on the rate of trait evolution following lineage-age. Older lineages show slower rates of trait evolution.
+	## cladogenetic_change: If, after budding speciation, the state of the budding lineage will change. The new state is randomly selected among the state space for the model. It does not follow the transition probabilities.
+
+    ## Check for the use of the budding_prob argument.
+    if( budding_prob > 1.0 ) stop( "budding_prob need to be smaller than 1.0" )
+    if( budding_prob < 0.0 ) stop( "budding_prob need to be larger than 0.0" )
+
+    ## Define the size of the chunks to be used for the simulation.
+    chunk_length <- vcv.phylo(tree)[1,1] / 1000 ## 1000 pieces of tree age.
+
+    ss <- rownames(Q)
+    tt <- reorder.phylo(tree) ## reorder the tree cladewise.
+    P <- vector(mode = "list", length = nrow(tt$edge))
+    ## Need a 'maps' list in the same format as 'phytools' 'simmap' object.
+    maps <- vector(mode = "list", length = nrow(tt$edge))
+
+    ## Set the root value for the simulation based on the arguments for the function.
+    if (is.null(anc)){
+        a <- sample(ss, 1)
+    } else{
+        a <- anc
+    }
+
+    ## For each edge of the tree we need an starting and an ending state.
+    STATES <- matrix(NA, nrow(tt$edge), 2)
+    ## For each edge of the tree we need a number to keep track of the lineage.
+    ANCESTRY <- vector(mode = "numeric", length = nrow(tt$edge) )
+    ## Need to keep track of the rate scaler to apply the exponential decay of the rate.
+    ## The rate scaler is populated at the end of the simulation on the branch. The descendant branch might refer to this value if the speciation was a budding speciation event. Because the age of the lineage accumulates.
+    SCALER <- vector(mode = "numeric", length = nrow(tt$edge) )
+    root_id <- which(tt$edge[, 1] == Ntip(tt) + 1) ## The root edges.
+    ## Set the root state for the simulation.
+    STATES[root_id, 1] <- a
+    ## Initiate the ancestry of the first lineage. At the edges connecting to the root we have the first and the second lineages
+    ANCESTRY[root_id] <- c(1,2)
+    ## The root have rate scaler of 1.0 because the history of the clade has just started. The rate scaler just after speciation (the new lineage) will also be 1.0
+    SCALER[root_id] <- 1.0 ## These are the root lineages, they will start with 1.0 as the scaler.
+
+    ## Create a matrix for the storage of the rate scalers associated with the age.
+    mat_scaler <- matrix(data = NA, nrow = 1, ncol = 3)
+
+    for (j in 1:nrow(tt$edge)){
+
+        ## For each edge we compute the exponential of the Q matrix multiplied by the time interval.
+        ## These give the probabilities of transition after the branch length time has passed.
+        ## When using an age_fn, the probability of transition at each time interval need to respond to the time.
+        ## The time is the average of the lineage age between the start and the end of the interval (simulation chunk).
+
+        ## ###################################
+        ## SIMULATION ALONG THE BRANCH - ANAGENETIC CHANGES.
+        ## This need to be done by the chunk.
+        chunk_vec <- get_chunk_vec(ll = tt$edge.length[j], chunk_length = chunk_length)
+        chunk_state <- vector(mode = "character", length = length(chunk_vec))
+        start_state <- STATES[j,1]
+
+        ## Define the scaler, if we are in the root lineage or in a new lineage, then the start state of the scaler is 1.0
+        ## This will need to change depending on the type of model. Each model will have a step function and a starting state.
+        if( sum(ANCESTRY == ANCESTRY[j]) == 1 ){ ## First time the lineage number appears in the ANCESTRY vector.
+            ## New lineage, including the root edges.
+            start_scaler <- 1.0
+            new_lineage <- TRUE
+        } else{
+            ## Mother lineage. Lineage already exists.
+            ## The ancestral edge NEEDS to belong to the same continued lineage.
+            ancestral_edge <- tt$edge[,2] == tt$edge[j,1]
+            start_scaler <- SCALER[ancestral_edge]
+            new_lineage <- FALSE
+        }
+
+        for( w in 1:length(chunk_vec) ){
+            ## Implement the lineage age function:
+            chunk_sum <- ifelse(test = w == 1, yes = 0, no = sum(chunk_vec[1:(w-1)]) )
+            ## get_chunk_age will compute the age of the current chunk following the trajectory of the current lineage.
+            age_tmp <- get_chunk_age(tree = tt, current_node = tt$edge[j,1], chunk_length = chunk_vec[w]
+                                         , chunk_sum = chunk_sum, lineage_number = ANCESTRY[j], ancestry = ANCESTRY)
+            ## Take one step on the scaler based on the decay_rate and the value of the previous scaler.
+            ## If the decay_rate is 0.0, then this scaler will always be 1.0 and the model will be time-homogeneous.
+            start_scaler <- start_scaler / exp(decay_rate * age_tmp)
+            ## Keep a matrix with all the scalers used in the simulation. [This is just to follow the flow of the simulations.]
+            mat_scaler <- rbind(mat_scaler, c(new_lineage, age_tmp, start_scaler))
+            ## The scaler is lower than 1.0, so the rate will decrease with the age of the lineage.
+            Q_tmp <- expm(Q * chunk_vec[w] * start_scaler)
+            rownames(Q_tmp) <- colnames(Q_tmp) <- ss
+            new_state <- ss[ which( rmultinom(n = 1, size = 1, prob = Q_tmp[start_state,] )[, 1] == 1) ]
+            chunk_state[w] <- new_state
+            start_state <- new_state
+        }
+
+        ## Update the rate scaler at the end of the branch for this branch.
+        SCALER[j] <- start_scaler
+        maps[[j]] <- setNames(object = chunk_vec, nm = chunk_state) ## The maps list for the stochastic maps.
+        new <- chunk_state[ length(chunk_state) ] ## The state at the end of the edge.
+        ## ###################################
+
+        ## ###################################
+        ## STEPS AT THE DESCENDANT NODE - BUDDING SPECIATION.
+        ## The state that was sampled now is the state at the descendent node.
+        STATES[j, 2] <- new
+        ii <- which(tt$edge[, 1] == tt$edge[j, 2])
+        if(length(ii) > 0){
+
+            ## Check if we have a budding speciation event or not:
+            if( sample(x = c(TRUE, FALSE), size = 1, prob = c(budding_prob, 1-budding_prob) ) ){
+                ## One lineage keeps the same ancestry (at random).
+                ndrd <- sample(x = c(1,2), size = 2, replace = FALSE)
+                ## Update the continuation of the ancestral.
+                ANCESTRY[ii[ndrd[1]]] <- ANCESTRY[j] ## j is the ancestral edge.
+                STATES[ii[ndrd[1]], 1] <- new
+                ## Update the new lineage, with the cladogenetic function.
+                ANCESTRY[ii[ndrd[2]]] <- max(ANCESTRY) + 1 ## the new lineage.
+                if( cladogenetic_change ){
+                    ## Have a deterministic change in the state at the budding speciation event.
+                    ## If binary trait, then bounce to the other state.
+                    STATES[ii[ndrd[2]], 1] <- budding_function(anc_state = new, ss = ss)
+                } else{
+                    STATES[ii[ndrd[2]], 1] <- new
+                }
+            } else{
+                ## Both descendants are new lineages and they share the same state.
+                STATES[ii, 1] <- new
+                ANCESTRY[ii] <- c(1,2) + max( ANCESTRY )
+            }
+
+        }
+        ## ###################################
+    }
+
+    xx_temp <- sapply(1:Ntip(tt), function(n, S, E) S[which(E == n)], S = STATES[, 2], E = tt$edge[,2])
+    x <- as.factor( setNames(object = xx_temp, nm = tt$tip.label) )
+
+    ## Make the mapped.edge to complete to simmap object.
+    mapped.edge <- matrix(0, nrow = nrow(tt$edge), ncol = ncol(Q), dimnames = list(paste(tt$edge[,1],",",tt$edge[,2],sep=""), rownames(Q)))
+    for(w in 1:length(maps) ){
+        for(k in 1:length(maps[[w]]) ){
+            mapped.edge[w,names(maps[[w]])[k]] <- mapped.edge[w,names(maps[[w]])[k]] + maps[[w]][k]
+        }
+    }
+
+    ## Include all the simmap information in the phylogeny to return.
+    tt$maps <- maps
+    tt$Q <- Q
+    tt$mapped.edge <- mapped.edge
+    tt$logL <- 42 ## Any number would do here.
+    class( tt ) <- c( class( tt ), "simmap" )
+
+    ## Temporary object to return the rate scalers.
+    colnames( mat_scaler ) <- c("new_lineage", "age", "scaler")
+
+    return( list(simmap = tt, tip_state = x, edge_state = STATES
+                 , ancestry = ANCESTRY, rate_scaler = SCALER
+                 , scaler_mat = mat_scaler) )
+}
+
+##' @noRd
+budding_function <- function(anc_state, ss){
+    ## anc_state = the state from the standard simulation. This state will follow the state change probabilties from the model.
+    ## ss = the state space
+    sister_ss <- ss[ ss != anc_state ]
+    ## Here using a simple random sample for the state of the sister.
+    ## However, we can imput any function, this function could even be conditioned on the history of the simulation so far.
+    sister_state <- sample(sister_ss, size = 1)
+    return( sister_state )
+}
+
+## Function matches the edge matrix of the phylogeny with the states matrix from the budding simulation.
+## Then returns the nodes where budding speciation was simulated to have happened.
+##' @noRd
+get_budding_nodes <- function(simMK){
+    tree <- simMK$simmap
+    phy_edge <- tree$edge
+    state_edge <- simMK$edge_state
+    root_node <- Ntip( tree ) + 1
+    max_node <- max( phy_edge[,1] )
+    budding_node <- vector(mode = "logical", length = length(root_node:max_node) )
+    nodes <- root_node:max_node
+    for( nd in 1:length(nodes) ){
+        node_pos <- which( phy_edge[,1] == nodes[nd] )
+        budding_node[nd] <- as.logical( length( unique( state_edge[node_pos,1] ) ) - 1 )
+    }
+    return( setNames(object = budding_node, nm = nodes) )
+}
+
+## A simple function to create a vector with the chunks.
+##' @noRd
+get_chunk_vec <- function(ll, chunk_length){
+    chunk_div <- ll / chunk_length
+    chunk_remainder <- chunk_div - floor(x = chunk_div)
+    ## The last chunk will be just a proportion of the chunk_size.
+    last_chunk <- chunk_remainder * chunk_length
+    chunk_n <- ceiling(chunk_div)
+    chunk_vec <- rep(x = chunk_length, length = chunk_n)
+    chunk_vec[chunk_n] <- last_chunk
+    return( chunk_vec )
+}
+
+##' @noRd
+get_chunk_age <- function(tree, current_node, chunk_length, chunk_sum, lineage_number, ancestry){
+    ## Compute the age of the lineage so far.
+    ## This is in the same unit as the edge lengths of the tree.
+    tree_age_nodes <- round(node.depth.edgelength(phy = tree)[1], digits = 7) - round(node.depth.edgelength(phy = tree), digits = 7)
+    lineage_nodes <- tree$edge[which(ancestry == lineage_number), 1] ## One of these, the oldest.
+    age_ancestral <- max( tree_age_nodes[ lineage_nodes ] )
+    age_current_node <- tree_age_nodes[ current_node ]
+    ## The time interval of the lineage plus the length of the branch visited so far.
+    age_lineage <- (age_ancestral - age_current_node) + chunk_sum + (chunk_length/2)
+    return( age_lineage )
+}
+
+## Get lineages longer than 1 branch and create palette of colors.
+## This vector of colors can be used to highlight the mother lineages.
+##' @noRd
+get_edge_color_lineages <- function(simMK, base_color = "gray"){
+    mother_lineages <- as.numeric( which( table( simMK$ancestry ) > 1 ) )
+    color_pool <- colors(distinct = TRUE)
+    ## Get only basic colors, strip the numbers.
+    color_pool <- unique( gsub(pattern = "[[:digit:]]+", replacement = "", x = color_pool) )
+    ## Exclude the base color and any of its variants.
+    color_pool <- color_pool[ -grep(pattern = base_color, x = color_pool) ]
+    mother_palette <- sample(x = color_pool, size = length(mother_lineages), replace = FALSE)
+    edge_colors <- rep(base_color, times = nrow(simMK$simmap$edge) )
+    for( mm in 1:length(mother_lineages) ){
+        edge_colors[ simMK$ancestry == mother_lineages[mm] ] <- mother_palette[mm]
+    }
+    return( edge_colors )
+}
+
