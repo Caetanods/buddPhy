@@ -24,6 +24,6 @@ plot_mother_lineages(
 Plots a phylogenetic tree.
 }
 \description{
-Function plots the phylogenetic tree from a buddPhy simulation and highlights the mother lineages. \cr
-Mother lineages are those that survived through one of more events of speciation via budding.
+Function plots the phylogenetic tree from a buddPhy simulation and highlights the mother lineages. Mother lineages are those that survived through one of more events of speciation via budding.
+At the moment the function use colors randomly and, unfortunately, the color scheme cannot be chosen. Please re-run the plot to change color configuration.
 }
