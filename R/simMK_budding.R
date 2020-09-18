@@ -1,6 +1,4 @@
-## Daniel Caetano - March 19, 2020
-## These are a collection of functions to simulate trait evolution under budding.
-## These functions are based on Liam's code for stochastic mapping in phytools.
+## Many of these functions are based on Liam's code for stochastic mapping in phytools.
 
 ## How should we compute the chunk length? Chunk length is only necessary for models with some age_fn. If Q is constant, then we can use the exp to get the waiting time until the next event (just like a standard MK model). If Q is going to change at each chunk following some age_fn, then we need to simulate the trait at time t after delta_t. Meaning that each chunk will be the branch between two pseudo-nodes and will have some rate multiplier applied to that chunk (controlled by the age_fn).
 
@@ -24,24 +22,25 @@
 #' @param anc state at the root. If "NULL", then a random state is selected.
 #' @param budding_prob probability that the speciation event was budding.
 #' @param decay_rate the rate for an exponential reduction of the rate of trait evolution proportional to lineage-age.
-#' @param cladogenetic_change if the state of the budding lineage should be distinct from the ancestral lineage (TRUE or FALSE).
+#' @param cladogenetic_change if a trait change should occur in the node associated with a budding event. Option are "none": no change, anagenetic changes only; "flat": trait changes randomly; "prob": trait changes following the transition probabilities from the Q matrix.
 #'
 #' @return A list with simmap, tip_state, edge_state, ancestry, rate_scaler, and scaler_mat.
 #' @export
 #' @importFrom ape vcv.phylo reorder.phylo
-sim_Mk_budding_exp_decay <- function(tree, Q, anc = NULL, budding_prob = 0.0, decay_rate = 2.0, cladogenetic_change = FALSE){
-
-	## tree: a phylogeny with branch lengths.
-	## Q: a transition matrix, with colnames the states.
-	## budding_prob: The probability (0.0 to 1.0) that a given node has a budding speciation.
-	##                 If set to 0.0, then none of the speciation events will be budding. If set to 1.0, then all will be.
-	## anc: Set the root state for the simulation.
-	## decay_rate: Exponential decay on the rate of trait evolution following lineage-age. Older lineages show slower rates of trait evolution.
-	## cladogenetic_change: If, after budding speciation, the state of the budding lineage will change. The new state is randomly selected among the state space for the model. It does not follow the transition probabilities.
+sim_Mk_budding_exp_decay <- function(tree, Q, anc = NULL, budding_prob = 0.0, decay_rate = 2.0, cladogenetic_change = "none"){
 
     ## Check for the use of the budding_prob argument.
     if( budding_prob > 1.0 ) stop( "budding_prob need to be smaller than 1.0" )
     if( budding_prob < 0.0 ) stop( "budding_prob need to be larger than 0.0" )
+
+    ## Check for the cladogenetic options:
+    cladogenetic_change <- match.arg(arg = cladogenetic_change, choices=c("none","flat", "prob"), several.ok = FALSE)
+
+    ## Check if ancestral state is within states on the Q matrix:
+    if( !is.null(anc) ){
+        options_state <- rownames(Q)
+        anc <- match.arg(arg = anc, choices = options_state, several.ok = FALSE)
+    }
 
     ## Define the size of the chunks to be used for the simulation.
     chunk_length <- vcv.phylo(tree)[1,1] / 1000 ## 1000 pieces of tree age.
@@ -146,13 +145,24 @@ sim_Mk_budding_exp_decay <- function(tree, Q, anc = NULL, budding_prob = 0.0, de
                 STATES[ii[ndrd[1]], 1] <- new
                 ## Update the new lineage, with the cladogenetic function.
                 ANCESTRY[ii[ndrd[2]]] <- max(ANCESTRY) + 1 ## the new lineage.
-                if( cladogenetic_change ){
+
+                ## Check if we make a cladogenetic change to the trait:
+                if( cladogenetic_change == "flat" ){
                     ## Have a deterministic change in the state at the budding speciation event.
                     ## If binary trait, then bounce to the other state.
-                    STATES[ii[ndrd[2]], 1] <- budding_function(anc_state = new, ss = ss)
+                    budd_states <- ss[ ss != new ] ## Any of the other states.
+                    STATES[ii[ndrd[2]], 1] <- sample(x = budd_states, size = 1)
+                } else if( cladogenetic_change == "prob" ){
+                    ## Change the trait state using the prob from the Q transition matrix.
+                    row_sub <- rownames(Q) == new
+                    col_sub <- !row_sub
+                    prob_shift <- Q[row_sub, col_sub] / sum( Q[row_sub, col_sub] )
+                    STATES[ii[ndrd[2]], 1] <- sample(x = ss[col_sub], prob = prob_shift, size = 1)
                 } else{
+                    ## Don't change the trait.
                     STATES[ii[ndrd[2]], 1] <- new
                 }
+
             } else{
                 ## Both descendants are new lineages and they share the same state.
                 STATES[ii, 1] <- new
@@ -187,17 +197,6 @@ sim_Mk_budding_exp_decay <- function(tree, Q, anc = NULL, budding_prob = 0.0, de
     return( list(simmap = tt, tip_state = x, edge_state = STATES
                  , ancestry = ANCESTRY, rate_scaler = SCALER
                  , scaler_mat = mat_scaler) )
-}
-
-##' @noRd
-budding_function <- function(anc_state, ss){
-    ## anc_state = the state from the standard simulation. This state will follow the state change probabilties from the model.
-    ## ss = the state space
-    sister_ss <- ss[ ss != anc_state ]
-    ## Here using a simple random sample for the state of the sister.
-    ## However, we can imput any function, this function could even be conditioned on the history of the simulation so far.
-    sister_state <- sample(sister_ss, size = 1)
-    return( sister_state )
 }
 
 ## Function matches the edge matrix of the phylogeny with the states matrix from the budding simulation.

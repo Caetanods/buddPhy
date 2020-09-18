@@ -10,7 +10,7 @@ sim_Mk_budding_exp_decay(
   anc = NULL,
   budding_prob = 0,
   decay_rate = 2,
-  cladogenetic_change = FALSE
+  cladogenetic_change = "none"
 )
 }
 \arguments{
@@ -24,7 +24,7 @@ sim_Mk_budding_exp_decay(
 
 \item{decay_rate}{the rate for an exponential reduction of the rate of trait evolution proportional to lineage-age.}
 
-\item{cladogenetic_change}{if the state of the budding lineage should be distinct from the ancestral lineage (TRUE or FALSE).}
+\item{cladogenetic_change}{if a trait change should occur in the node associated with a budding event. Option are "none": no change, anagenetic changes only; "flat": trait changes randomly; "prob": trait changes following the transition probabilities from the Q matrix.}
 }
 \value{
 A list with simmap, tip_state, edge_state, ancestry, rate_scaler, and scaler_mat.
