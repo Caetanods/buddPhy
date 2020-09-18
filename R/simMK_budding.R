@@ -29,7 +29,7 @@
 #' @return A list with simmap, tip_state, edge_state, ancestry, rate_scaler, and scaler_mat.
 #' @export
 #' @importFrom ape vcv.phylo reorder.phylo
-sim_Mk_budding_exp_decay <- function(tree, Q, anc = NULL, budding_prob = 0.0, decay_rate = 2.0, cladogenetic_change = TRUE){
+sim_Mk_budding_exp_decay <- function(tree, Q, anc = NULL, budding_prob = 0.0, decay_rate = 2.0, cladogenetic_change = FALSE){
 
 	## tree: a phylogeny with branch lengths.
 	## Q: a transition matrix, with colnames the states.
@@ -213,6 +213,7 @@ get_budding_nodes <- function(simMK){
     nodes <- root_node:max_node
     for( nd in 1:length(nodes) ){
         node_pos <- which( phy_edge[,1] == nodes[nd] )
+        ## If a single occurrence, then 0. If 2 or more occurrences (therefore the lineage survived speciation) then it is >0 (transformed into TRUE).
         budding_node[nd] <- as.logical( length( unique( state_edge[node_pos,1] ) ) - 1 )
     }
     return( setNames(object = budding_node, nm = nodes) )
@@ -262,3 +263,22 @@ get_edge_color_lineages <- function(simMK, base_color = "gray"){
     return( edge_colors )
 }
 
+## Function to plot the phylogeny and mark the mother lineages.
+## Mother lineages are the lineages that survived through one or more events of speciation.
+#' Plot phylogeny and show mother lineages
+#'
+#' Function plots the phylogenetic tree from a buddPhy simulation and highlights the mother lineages. Mother lineages are those that survived through one of more events of speciation via budding.
+#' At the moment the function use colors randomly and, unfortunately, the color scheme cannot be chosen. Please re-run the plot to change color configuration.
+#' @param sim_obj the output of a buddPhy simulation function.
+#' @param background_color the color of the non-mother lineages.
+#' @param edge_width the width of the phylogeny branches.
+#' @param no_margin if to add margin. See 'ape::plot.phylo'.
+#'
+#' @return Plots a phylogenetic tree.
+#' @export
+#' @importFrom ape plot.phylo
+plot_mother_lineages <- function(sim_obj, background_color = "gray", edge_width = 3, no_margin = TRUE){
+    bud_nodes <- get_budding_nodes(simMK = sim_obj)
+    edge_colors <- get_edge_color_lineages(simMK = sim_obj, base_color = background_color)
+    plot.phylo(x = sim_obj$simmap, edge.color = edge_colors, edge.width = edge_width, no.margin = no_margin)
+}

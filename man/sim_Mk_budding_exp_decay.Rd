@@ -10,7 +10,7 @@ sim_Mk_budding_exp_decay(
   anc = NULL,
   budding_prob = 0,
   decay_rate = 2,
-  cladogenetic_change = TRUE
+  cladogenetic_change = FALSE
 )
 }
 \arguments{
