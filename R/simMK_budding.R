@@ -4,7 +4,6 @@
 
 ## #######################################################
 ## EXPANDING THE FUNCTION
-## The function can have a budding process that will control how the trait changes when a budding speciation happens. If we have a binary trait, like here, this is not necessary because the change will always go to the other trait.
 ## The type of decay function and/or increase in rate of trait evolution with lineage-age can be expanded. Here I will create one function for each type of lineage-age relationship. It is simpler.
 ## Need to add a probability of autocorrelation among the budding events. How likely is a budding event to follow another one.
 
@@ -17,21 +16,42 @@
 #' Simulate discrete trait evolution with budding and exponential decay function.
 #'
 #' This function adds a probability of budding speciation and allows only for a negative relationship between rates of trait evolution and lineage-age. Function also allows for cladogenetic change in the trait (a deterministic change in the state of the trait after budding speciation happens).
+#' \cr
+#' MOTHER LINEAGES: The user can set the 'budding_mother' parameter to control the fecundity of mother lineages. If 'budding_mother' is NA, then mother lineages will appear stochastic given the global probability of budding speciation events controlled by the 'budding_prob' argument. If 'budding_mother' is 0.0, then mother lineages will have only a single daughter lineage and the next speciation event will always be a symmetric speciation. If 'budding_mother' is set to 1.0, then once a budding speciation happens the surviving will always survive the speciation event and the descendant nodes will never represent symmetric speciation events. Intermediate values can be used to set intermediate scenarios.
+#'
 #' @param tree phylogeny with branch lengths.
 #' @param Q transition matrix for a Markov model.
 #' @param anc state at the root. If "NULL", then a random state is selected.
 #' @param budding_prob probability that the speciation event was budding.
+#' @param budding_mother autocorrelation of budding events. If NA, then no autocorrelation happens and the occurrence of budding speciation will always follow the same probability of 'budding_prob'. If 'budding_mother' is non-zero, then the probability that the mother lineage will generate another new lineage through a budding speciation event (and, thus, survive another speciation event) will be given by 'budding_mother' instead. The probability of the next budding event after a symmetrical speciation event will reset to 'budding_prob'.
 #' @param decay_rate the rate for an exponential reduction of the rate of trait evolution proportional to lineage-age.
 #' @param cladogenetic_change if a trait change should occur in the node associated with a budding event. Option are "none": no change, anagenetic changes only; "flat": trait changes randomly; "prob": trait changes following the transition probabilities from the Q matrix.
 #'
 #' @return A list with simmap, tip_state, edge_state, ancestry, rate_scaler, and scaler_mat.
 #' @export
 #' @importFrom ape vcv.phylo reorder.phylo
-sim_Mk_budding_exp_decay <- function(tree, Q, anc = NULL, budding_prob = 0.0, decay_rate = 2.0, cladogenetic_change = "none"){
+sim_Mk_budding_exp_decay <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_mother = NA, decay_rate = 2.0, cladogenetic_change = "none"){
+
+    ## Next thing to do: Add an autocorrelation value for the budding process. [working on this]
+    ## Implement other lineage_age processes (in this or other functions).
 
     ## Check for the use of the budding_prob argument.
     if( budding_prob > 1.0 ) stop( "budding_prob need to be smaller than 1.0" )
     if( budding_prob < 0.0 ) stop( "budding_prob need to be larger than 0.0" )
+
+    ## Check if budding_mother is set to NA.
+    if( is.na( budding_mother ) ){
+        budding_mother <- budding_prob
+    } else{ ## Check if numeric.
+        if( !is.numeric( budding_mother ) ) stop( "budding_mother needs to be NA or a value between 0.0 and 1.0" )
+    }
+
+    ## Check for the use of the budding_mother argument.
+    if( budding_mother > 1.0 ) stop( "budding_mother need to be smaller than 1.0" )
+    if( budding_mother < 0.0 ) stop( "budding_mother need to be larger than 0.0" )
+
+    ## If no budding in the model, then budding_mother should also be absent.
+    if( budding_prob == 0.0 ) budding_mother <- 0.0
 
     ## Check for the cladogenetic options:
     cladogenetic_change <- match.arg(arg = cladogenetic_change, choices=c("none","flat", "prob"), several.ok = FALSE)
@@ -113,6 +133,7 @@ sim_Mk_budding_exp_decay <- function(tree, Q, anc = NULL, budding_prob = 0.0, de
             ## Take one step on the scaler based on the decay_rate and the value of the previous scaler.
             ## If the decay_rate is 0.0, then this scaler will always be 1.0 and the model will be time-homogeneous.
             start_scaler <- start_scaler / exp(decay_rate * age_tmp)
+
             ## Keep a matrix with all the scalers used in the simulation. [This is just to follow the flow of the simulations.]
             mat_scaler <- rbind(mat_scaler, c(new_lineage, age_tmp, start_scaler))
             ## The scaler is lower than 1.0, so the rate will decrease with the age of the lineage.
@@ -131,13 +152,26 @@ sim_Mk_budding_exp_decay <- function(tree, Q, anc = NULL, budding_prob = 0.0, de
 
         ## ###################################
         ## STEPS AT THE DESCENDANT NODE - BUDDING SPECIATION.
-        ## The state that was sampled now is the state at the descendent node.
+        ## The state that was sampled now is the state at the descendant node.
         STATES[j, 2] <- new
+        ## Check if the descendant node is an internal node or tip.
         ii <- which(tt$edge[, 1] == tt$edge[j, 2])
-        if(length(ii) > 0){
+        if(length(ii) > 0){ ## Internal node (two descendant edges).
 
-            ## Check if we have a budding speciation event or not:
-            if( sample(x = c(TRUE, FALSE), size = 1, prob = c(budding_prob, 1-budding_prob) ) ){
+            ## #####################################
+            ## Check for mother lineage and if budding happens.
+            if( !new_lineage ){
+                ## Apply 'budding_mother' parameter.
+                budd_happens <- sample(x = c(TRUE, FALSE), size = 1, prob = c(budding_mother, 1-budding_mother) )
+            } else{
+                ## Now lineage, so apply 'budding_prob'.
+                budd_happens <- sample(x = c(TRUE, FALSE), size = 1, prob = c(budding_prob, 1-budding_prob) )
+            }
+            ## #####################################
+
+            ## #####################################
+            ## Apply budding speciation if necessary.
+            if( budd_happens ){
                 ## One lineage keeps the same ancestry (at random).
                 ndrd <- sample(x = c(1,2), size = 2, replace = FALSE)
                 ## Update the continuation of the ancestral.

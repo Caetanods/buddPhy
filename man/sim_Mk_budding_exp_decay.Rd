@@ -9,6 +9,7 @@ sim_Mk_budding_exp_decay(
   Q,
   anc = NULL,
   budding_prob = 0,
+  budding_mother = NA,
   decay_rate = 2,
   cladogenetic_change = "none"
 )
@@ -22,6 +23,8 @@ sim_Mk_budding_exp_decay(
 
 \item{budding_prob}{probability that the speciation event was budding.}
 
+\item{budding_mother}{autocorrelation of budding events. If NA, then no autocorrelation happens and the occurrence of budding speciation will always follow the same probability of 'budding_prob'. If 'budding_mother' is non-zero, then the probability that the mother lineage will generate another new lineage through a budding speciation event (and, thus, survive another speciation event) will be given by 'budding_mother' instead. The probability of the next budding event after a symmetrical speciation event will reset to 'budding_prob'.}
+
 \item{decay_rate}{the rate for an exponential reduction of the rate of trait evolution proportional to lineage-age.}
 
 \item{cladogenetic_change}{if a trait change should occur in the node associated with a budding event. Option are "none": no change, anagenetic changes only; "flat": trait changes randomly; "prob": trait changes following the transition probabilities from the Q matrix.}
@@ -31,4 +34,6 @@ A list with simmap, tip_state, edge_state, ancestry, rate_scaler, and scaler_mat
 }
 \description{
 This function adds a probability of budding speciation and allows only for a negative relationship between rates of trait evolution and lineage-age. Function also allows for cladogenetic change in the trait (a deterministic change in the state of the trait after budding speciation happens).
+\cr
+MOTHER LINEAGES: The user can set the 'budding_mother' parameter to control the fecundity of mother lineages. If 'budding_mother' is NA, then mother lineages will appear stochastic given the global probability of budding speciation events controlled by the 'budding_prob' argument. If 'budding_mother' is 0.0, then mother lineages will have only a single daughter lineage and the next speciation event will always be a symmetric speciation. If 'budding_mother' is set to 1.0, then once a budding speciation happens the surviving will always survive the speciation event and the descendant nodes will never represent symmetric speciation events. Intermediate values can be used to set intermediate scenarios.
 }
