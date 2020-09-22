@@ -11,7 +11,7 @@
 ## Multiple factors control the simulation and the probability of budding.
 ## Function keeps track of the ancestral and descendant lineages.
 ## Ideally we want a general function that can take any age function to make the simulation.
-## Here we implemented an exponential decay function with the "decay_rate" parameter. This simulates an exponential negative relationship between lineage-age and the rate of trait evolution.
+## Here we implemented an exponential decay function with the "change_rate" parameter. This simulates an exponential negative relationship between lineage-age and the rate of trait evolution.
 
 #' Simulate discrete trait evolution with budding and exponential decay function.
 #'
@@ -24,13 +24,14 @@
 #' @param anc state at the root. If "NULL", then a random state is selected.
 #' @param budding_prob probability that the speciation event was budding.
 #' @param budding_mother autocorrelation of budding events. If NA, then no autocorrelation happens and the occurrence of budding speciation will always follow the same probability of 'budding_prob'. If 'budding_mother' is non-zero, then the probability that the mother lineage will generate another new lineage through a budding speciation event (and, thus, survive another speciation event) will be given by 'budding_mother' instead. The probability of the next budding event after a symmetrical speciation event will reset to 'budding_prob'.
-#' @param decay_rate the rate for an exponential reduction of the rate of trait evolution proportional to lineage-age.
+#' @param change_rate the rate for an exponential reduction of the rate of trait evolution proportional to lineage-age.
+#' @param decay_fn TRUE or FALSE. If TRUE, then the rate of trait evolution has a negative (exponential) relationship with lineage-age. If FALSE, then this relationship becomes positive.
 #' @param cladogenetic_change if a trait change should occur in the node associated with a budding event. Option are "none": no change, anagenetic changes only; "flat": trait changes randomly; "prob": trait changes following the transition probabilities from the Q matrix.
 #'
 #' @return A list with simmap, tip_state, edge_state, ancestry, rate_scaler, and scaler_mat.
 #' @export
 #' @importFrom ape vcv.phylo reorder.phylo
-sim_Mk_budding_exp_decay <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_mother = NA, decay_rate = 2.0, cladogenetic_change = "none"){
+sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_mother = NA, change_rate = 2.0, decay_fn = TRUE, cladogenetic_change = "none"){
 
     ## Next thing to do: Add an autocorrelation value for the budding process. [working on this]
     ## Implement other lineage_age processes (in this or other functions).
@@ -130,10 +131,14 @@ sim_Mk_budding_exp_decay <- function(tree, Q, anc = NULL, budding_prob = 0.0, bu
             ## get_chunk_age will compute the age of the current chunk following the trajectory of the current lineage.
             age_tmp <- get_chunk_age(tree = tt, current_node = tt$edge[j,1], chunk_length = chunk_vec[w]
                                          , chunk_sum = chunk_sum, lineage_number = ANCESTRY[j], ancestry = ANCESTRY)
-            ## Take one step on the scaler based on the decay_rate and the value of the previous scaler.
-            ## If the decay_rate is 0.0, then this scaler will always be 1.0 and the model will be time-homogeneous.
-            start_scaler <- start_scaler / exp(decay_rate * age_tmp)
-
+            ## Take one step on the scaler based on the change_rate and the value of the previous scaler.
+            ## If the change_rate is 0.0, then this scaler will always be 1.0 and the model will be time-homogeneous.
+            if( decay_fn ){
+                start_scaler <- start_scaler / exp(change_rate * age_tmp)
+            } else{
+                ## Implements the positive relationship with time. Also exponential.
+                start_scaler <- start_scaler * exp(change_rate * age_tmp)
+            }
             ## Keep a matrix with all the scalers used in the simulation. [This is just to follow the flow of the simulations.]
             mat_scaler <- rbind(mat_scaler, c(new_lineage, age_tmp, start_scaler))
             ## The scaler is lower than 1.0, so the rate will decrease with the age of the lineage.
