@@ -31,6 +31,7 @@
 #' @return A list with simmap, tip_state, edge_state, ancestry, rate_scaler, and scaler_mat.
 #' @export
 #' @importFrom ape vcv.phylo reorder.phylo
+#' @importFrom expm expm
 sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_mother = NA, change_rate = 2.0, decay_fn = TRUE, cladogenetic_change = "none"){
 
     ## Next thing to do: Add an autocorrelation value for the budding process. [working on this]
@@ -83,15 +84,18 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
     STATES <- matrix(NA, nrow(tt$edge), 2)
     ## For each edge of the tree we need a number to keep track of the lineage.
     ANCESTRY <- vector(mode = "numeric", length = nrow(tt$edge) )
-    ## Need to keep track of the rate scaler to apply the exponential decay of the rate.
-    ## The rate scaler is populated at the end of the simulation on the branch. The descendant branch might refer to this value if the speciation was a budding speciation event. Because the age of the lineage accumulates.
-    SCALER <- vector(mode = "numeric", length = nrow(tt$edge) )
+
+    ## The rate scaler is a list in the same format of maps. So we can plot the rate scalers per branch.
+    ## SCALER <- vector(mode = "numeric", length = nrow(tt$edge) )
+    SCALER <- vector(mode = "list", length = nrow(tt$edge))
+
     root_id <- which(tt$edge[, 1] == Ntip(tt) + 1) ## The root edges.
     ## Set the root state for the simulation.
     STATES[root_id, 1] <- a
     ## Initiate the ancestry of the first lineage. At the edges connecting to the root we have the first and the second lineages
     ANCESTRY[root_id] <- c(1,2)
-    ## The root have rate scaler of 1.0 because the history of the clade has just started. The rate scaler just after speciation (the new lineage) will also be 1.0
+    ## The root have rate scaler of 1.0 because the history of the clade has just started. The rate scaler just after speciation (of a new lineage) will also be 1.0
+    ## Note that 1.0 will be the highest scaler when decay_fn=TRUE and the lowest when decay_fn=FALSE. But in either case the starting scaler will be the same.
     SCALER[root_id] <- 1.0 ## These are the root lineages, they will start with 1.0 as the scaler.
 
     ## Create a matrix for the storage of the rate scalers associated with the age.
@@ -109,6 +113,7 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
         ## This need to be done by the chunk.
         chunk_vec <- get_chunk_vec(ll = tt$edge.length[j], chunk_length = chunk_length)
         chunk_state <- vector(mode = "character", length = length(chunk_vec))
+        chunk_scaler <- vector(mode = "numeric", length = length(chunk_vec))
         start_state <- STATES[j,1]
 
         ## Define the scaler, if we are in the root lineage or in a new lineage, then the start state of the scaler is 1.0
@@ -121,7 +126,7 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
             ## Mother lineage. Lineage already exists.
             ## The ancestral edge NEEDS to belong to the same continued lineage.
             ancestral_edge <- tt$edge[,2] == tt$edge[j,1]
-            start_scaler <- SCALER[ancestral_edge]
+            start_scaler <- get_des_scaler(scaler = SCALER, id = ancestral_edge)
             new_lineage <- FALSE
         }
 
@@ -139,18 +144,19 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
                 ## Implements the positive relationship with time. Also exponential.
                 start_scaler <- start_scaler * exp(change_rate * age_tmp)
             }
-            ## Keep a matrix with all the scalers used in the simulation. [This is just to follow the flow of the simulations.]
-            mat_scaler <- rbind(mat_scaler, c(new_lineage, age_tmp, start_scaler))
-            ## The scaler is lower than 1.0, so the rate will decrease with the age of the lineage.
+            ## Scale the Q matrix and draw the new state after the chunk time.
             Q_tmp <- expm(Q * chunk_vec[w] * start_scaler)
             rownames(Q_tmp) <- colnames(Q_tmp) <- ss
             new_state <- ss[ which( rmultinom(n = 1, size = 1, prob = Q_tmp[start_state,] )[, 1] == 1) ]
+            ## Log the state and the scaler values.
+            mat_scaler <- rbind(mat_scaler, c(new_lineage, age_tmp, start_scaler))
             chunk_state[w] <- new_state
             start_state <- new_state
+            chunk_scaler[w] <- start_scaler
         }
 
-        ## Update the rate scaler at the end of the branch for this branch.
-        SCALER[j] <- start_scaler
+        ## Update the maps for the state and the scaler values.
+        SCALER[[j]] <- data.frame(chunk = chunk_vec, scaler = chunk_scaler)
         maps[[j]] <- setNames(object = chunk_vec, nm = chunk_state) ## The maps list for the stochastic maps.
         new <- chunk_state[ length(chunk_state) ] ## The state at the end of the edge.
         ## ###################################
@@ -234,7 +240,7 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
     colnames( mat_scaler ) <- c("new_lineage", "age", "scaler")
 
     return( list(simmap = tt, tip_state = x, edge_state = STATES
-                 , ancestry = ANCESTRY, rate_scaler = SCALER
+                 , ancestry = ANCESTRY, rate_scaler_maps = SCALER
                  , scaler_mat = mat_scaler) )
 }
 
@@ -301,6 +307,16 @@ get_edge_color_lineages <- function(simMK, base_color = "gray"){
     return( edge_colors )
 }
 
+##' @noRd
+get_des_scaler <- function(scaler, id){
+    ## Get the last rate scaler value in the ancestral lineage.
+    num_in <- which( id )
+    x_mat <- scaler[[num_in]]
+    last <- nrow( x_mat )
+    x_last <- as.numeric( x_mat[last,2] )
+    return( x_last )
+}
+
 ## Function to plot the phylogeny and mark the mother lineages.
 ## Mother lineages are the lineages that survived through one or more events of speciation.
 #' Plot phylogeny and show mother lineages
@@ -319,4 +335,85 @@ plot_mother_lineages <- function(sim_obj, background_color = "gray", edge_width 
     bud_nodes <- get_budding_nodes(simMK = sim_obj)
     edge_colors <- get_edge_color_lineages(simMK = sim_obj, base_color = background_color)
     plot.phylo(x = sim_obj$simmap, edge.color = edge_colors, edge.width = edge_width, no.margin = no_margin)
+}
+
+#' Make stochastic map with rate scalers
+#'
+#' Plot the rate scalers used in the simulation to the phylogenetic tree. Also return a vector of colors to be used for visualization of the gradient paired with the breaking points for the rate scaler values. \cr
+#' Use 'low_cut' or 'high_cut' to focus the rate categories into the slow or fast rate categories. This can be used to provide a more informative plot of rates along the branches of the phylogeny.
+#'
+#' @param sims the simulation object output from 'sim_Mk_budding_exp'.
+#' @param ncat number of categories to make the legend for the scalers plot.
+#' @param low_cut break for the first category (slow rate scalers). Rate scaler values above 'low_cut' value will be divided into 'ncat'-1 categories.
+#' @param high_cut break for the last category (fast rate scalers). Rate scaler values below 'high_cut' value will be divided into 'ncat'-1 categories.
+#'
+#' @return a list with a simmap object and a matrix with legend information
+#' @export
+make_scaler_simmap <- function(sims, ncat = 10, low_cut, high_cut){
+
+    scaler_maps <- sims$rate_scaler_maps
+    raw_poll <- unlist( sapply(scaler_maps, function(x) x[,2]) )
+    scaler_pool <- range( raw_poll )
+
+    if( missing( high_cut ) & missing( low_cut ) ){
+        ## Compute natural breaks.
+        breaks_right <- seq(from = scaler_pool[1], to = scaler_pool[2], length.out = ncat+1)
+        breaks_right[1] <- floor( breaks_right[1] )
+        breaks_right[length(breaks_right)] <- ceiling( breaks_right[length(breaks_right)] )
+    }
+
+    if( !missing( high_cut ) & !missing( low_cut ) ) stop("can only provide low_cut OR high_cut, not both.")
+
+    if( !missing( high_cut ) ){
+        ## Use and check the value of high_cut.
+        if( !is.numeric( high_cut ) ) stop("if provided, high_cut needs to be a numeric value.")
+        if( high_cut > max(scaler_pool) ) stop("high_cut value is larger than the max observed scaler.")
+        breaks_right <- seq(from = scaler_pool[1], to = high_cut, length.out = ncat)
+        ## Need to fix both ends to make sure the breaks include the observed values.
+        breaks_right <- c(breaks_right, ceiling(scaler_pool[2]))
+        breaks_right[1] <- floor( breaks_right[1] )
+    }
+
+    if( !missing( low_cut ) ){
+        ## Use and check the value of low_cut.
+        if( !is.numeric( low_cut ) ) stop("if provided, low_cut needs to be a numeric value.")
+        if( low_cut < min(scaler_pool) ) stop("low_cut value is smaller than the min observed scaler.")
+        breaks_right <- seq(from = low_cut, to = scaler_pool[2], length.out = ncat)
+        ## Need to fix both ends to make sure the breaks include the observed values.
+        breaks_right <- c(floor(scaler_pool[1]), breaks_right)
+        breaks_right[length(breaks_right)] <- ceiling( breaks_right[length(breaks_right)] )
+    }
+
+    cat_labels <- LETTERS[1:ncat]
+    maps_formated <- vector(mode = "list", length = length(scaler_maps))
+    for( i in 1:length(scaler_maps) ){
+        maps_labels <- as.character( cut(x = scaler_maps[[i]][,2], breaks = breaks_right
+                                         , labels = cat_labels, right = TRUE) )
+        maps_formated[[i]] <- setNames(object = scaler_maps[[i]][,1], nm = maps_labels)
+    }
+
+    ## Make the mapped.edge to complete to simmap object.
+    mapped.edge <- matrix(0, nrow = nrow(sims$simmap$edge), ncol = ncat, dimnames = list(paste(sims$simmap$edge[,1],",",sims$simmap$edge[,2],sep=""), cat_labels))
+    for(w in 1:length(maps_formated) ){
+        for(k in 1:length(maps_formated[[w]]) ){
+            mapped.edge[w,names(maps_formated[[w]])[k]] <- mapped.edge[w,names(maps_formated[[w]])[k]] + maps_formated[[w]][k]
+        }
+    }
+
+    ## Make a color vector for plot simmap.
+    colorfn <- colorRampPalette(colors = c("green", "yellow", "red"))
+    col_rgb <- colorfn(ncat)
+    col_vec <- setNames(object = col_rgb, nm = cat_labels)
+
+    ## Create a matrix with the legend for the plot.
+    legend_matrix <- data.frame(from = breaks_right[-length(breaks_right)], to = breaks_right[-1], label = cat_labels, col = col_rgb)
+
+    ## Substitute the maps from the original tree:
+    simmap <- sims$simmap
+    simmap$maps <- maps_formated
+    simmap$mapped.edge <- mapped.edge
+
+    ## Return the stochastic maps and the matrix with the legend.
+    ll <- list(simmap = simmap, legend_matrix = legend_matrix, col_vec = col_vec)
+    return( ll )
 }
