@@ -34,9 +34,6 @@
 #' @importFrom expm expm
 sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_mother = NA, change_rate = 2.0, decay_fn = TRUE, cladogenetic_change = "none"){
 
-    ## Next thing to do: Add an autocorrelation value for the budding process. [working on this]
-    ## Implement other lineage_age processes (in this or other functions).
-
     ## Check for the use of the budding_prob argument.
     if( budding_prob > 1.0 ) stop( "budding_prob need to be smaller than 1.0" )
     if( budding_prob < 0.0 ) stop( "budding_prob need to be larger than 0.0" )
@@ -69,7 +66,7 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
 
     ss <- rownames(Q)
     tt <- reorder.phylo(tree) ## reorder the tree cladewise.
-    P <- vector(mode = "list", length = nrow(tt$edge))
+    ## P <- vector(mode = "list", length = nrow(tt$edge))
     ## Need a 'maps' list in the same format as 'phytools' 'simmap' object.
     maps <- vector(mode = "list", length = nrow(tt$edge))
 
