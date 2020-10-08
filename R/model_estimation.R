@@ -27,6 +27,8 @@ tree_rescale_exp <- function(change_rate = 0.05, budding_prob = 0.3, tree, chunk
     ANCESTRY[root_id] <- c(1,2)
     scaler_edge_vec <- vector(mode = "numeric", length = nrow(tt$edge))
     scaler_edge_vec[root_id] <- 1.0 ## Starting scaler for either decay or positive lineage-age rates models.
+    ## This is an homogeneous decay process, the starting scaler is always the same.
+    start_scaler <- 1.0
 
     for (j in 1:nrow(tt$edge)){
 
@@ -37,14 +39,14 @@ tree_rescale_exp <- function(change_rate = 0.05, budding_prob = 0.3, tree, chunk
         if( sum(ANCESTRY == ANCESTRY[j]) == 1 ){
             ## First time the lineage number appears in the ANCESTRY vector.
             ## New lineage, including the root edges.
-            start_scaler <- 1.0
+            ## start_scaler <- 1.0
             new_lineage <- TRUE
         } else{
             ## Mother lineage. Lineage already exists.
             ## The ancestral edge NEEDS to belong to the same continued lineage.
             ancestral_edge <- tt$edge[,2] == tt$edge[j,1]
             ## Same as line below, but here we just want the value at the end of the branch.
-            start_scaler <- scaler_edge_vec[ancestral_edge]
+            ## start_scaler <- scaler_edge_vec[ancestral_edge]
             ## start_scaler <- get_des_scaler(scaler = SCALER, id = ancestral_edge)
             new_lineage <- FALSE
         }
@@ -57,18 +59,19 @@ tree_rescale_exp <- function(change_rate = 0.05, budding_prob = 0.3, tree, chunk
             ## Take one step on the scaler based on the change_rate and the value of the previous scaler.
             ## If the change_rate is 0.0, then this scaler will always be 1.0 and the model will be time-homogeneous.
             if( decay_fn ){
-                start_scaler <- start_scaler / exp(change_rate * age_tmp)
+                ## The relative start scaler never changes.
+                chunk_scaler <- start_scaler / exp(change_rate * age_tmp)
             } else{
-                start_scaler <- start_scaler * exp(change_rate * age_tmp)
+                chunk_scaler <- start_scaler * exp(change_rate * age_tmp)
             }
             ## Scale the chunk of the branch:
             ## This will need to be stored in a copy of the tree, otherwise we will get wrong chunk ages.
-            rescaled_chunk_vec[w] <- rescaled_chunk_vec[w] * start_scaler
+            rescaled_chunk_vec[w] <- rescaled_chunk_vec[w] * chunk_scaler
         }
 
         ## Log the scaler value at the end of edge j.
         ## This substitutes the SCALER list.
-        scaler_edge_vec[j] <- start_scaler
+        scaler_edge_vec[j] <- chunk_scaler
 
         ## Update the branch of the rescaled tree. This will be the sum of the chunks.
         rescaled_tree$edge.length[j] <- sum( rescaled_chunk_vec )
@@ -124,9 +127,10 @@ initialize_budding_history <- function(tree, change_rate = 0.05, budding_prob = 
     ANCESTRY[root_id] <- c(1,2)
     scaler_edge_vec <- vector(mode = "numeric", length = nrow(tt$edge))
     scaler_edge_vec[root_id] <- 1.0 ## Starting scaler for either decay or positive lineage-age rates models.
+    ## Starting scaler is always the same. Homogeneos process.
+    start_scaler <- 1.0
 
     for (j in 1:nrow(tt$edge)){
-
         ## For each edge we use the scaling function to rescale the branch.
         chunk_vec <- buddPhy:::get_chunk_vec(ll = tt$edge.length[j], chunk_length = chunk_length)
         rescaled_chunk_vec <- chunk_vec ## Chunks to be rescaled.
@@ -134,14 +138,14 @@ initialize_budding_history <- function(tree, change_rate = 0.05, budding_prob = 
         if( sum(ANCESTRY == ANCESTRY[j]) == 1 ){
             ## First time the lineage number appears in the ANCESTRY vector.
             ## New lineage, including the root edges.
-            start_scaler <- 1.0
+            ## start_scaler <- 1.0
             new_lineage <- TRUE
         } else{
             ## Mother lineage. Lineage already exists.
             ## The ancestral edge NEEDS to belong to the same continued lineage.
             ancestral_edge <- tt$edge[,2] == tt$edge[j,1]
             ## Same as line below, but here we just want the value at the end of the branch.
-            start_scaler <- scaler_edge_vec[ancestral_edge]
+            ## start_scaler <- scaler_edge_vec[ancestral_edge]
             ## start_scaler <- get_des_scaler(scaler = SCALER, id = ancestral_edge)
             new_lineage <- FALSE
         }
@@ -154,18 +158,18 @@ initialize_budding_history <- function(tree, change_rate = 0.05, budding_prob = 
             ## Take one step on the scaler based on the change_rate and the value of the previous scaler.
             ## If the change_rate is 0.0, then this scaler will always be 1.0 and the model will be time-homogeneous.
             if( decay_fn ){
-                start_scaler <- start_scaler / exp(change_rate * age_tmp)
+                chunk_scaler <- start_scaler / exp(change_rate * age_tmp)
             } else{
-                start_scaler <- start_scaler * exp(change_rate * age_tmp)
+                chunk_scaler <- start_scaler * exp(change_rate * age_tmp)
             }
             ## Scale the chunk of the branch:
             ## This will need to be stored in a copy of the tree, otherwise we will get wrong chunk ages.
-            rescaled_chunk_vec[w] <- rescaled_chunk_vec[w] * start_scaler
+            rescaled_chunk_vec[w] <- rescaled_chunk_vec[w] * chunk_scaler
         }
 
         ## Log the scaler value at the end of edge j.
         ## This substitutes the SCALER list.
-        scaler_edge_vec[j] <- start_scaler
+        scaler_edge_vec[j] <- chunk_scaler
 
         ## Update the branch of the rescaled tree. This will be the sum of the chunks.
         rescaled_tree$edge.length[j] <- sum( rescaled_chunk_vec )
@@ -237,6 +241,7 @@ update_budding_history <- function(budd_hist, change_rate = 0.05, budding_prob =
     chunk_length <- vcv.phylo(tree)[1,1] * chunk_fraction
     tt <- reorder.phylo(tree) ## reorder the tree cladewise.
     rescaled_tree <- tt ## Tree to be rescaled.
+    start_scaler <- 1.0 ## Start scaler is always the same.
 
     ## Update all descending lineages:
     ## for (j in 1:nrow(tt$edge)){
@@ -249,14 +254,14 @@ update_budding_history <- function(budd_hist, change_rate = 0.05, budding_prob =
         if( sum(ANCESTRY == ANCESTRY[j]) == 1 ){
             ## First time the lineage number appears in the ANCESTRY vector.
             ## New lineage, including the root edges.
-            start_scaler <- 1.0
+            ## start_scaler <- 1.0
             new_lineage <- TRUE
         } else{
             ## Mother lineage. Lineage already exists.
             ## The ancestral edge NEEDS to belong to the same continued lineage.
             ancestral_edge <- tt$edge[,2] == tt$edge[j,1]
             ## Same as line below, but here we just want the value at the end of the branch.
-            start_scaler <- scaler_edge_vec[ancestral_edge]
+            ## start_scaler <- scaler_edge_vec[ancestral_edge]
             ## start_scaler <- get_des_scaler(scaler = SCALER, id = ancestral_edge)
             new_lineage <- FALSE
         }
@@ -269,18 +274,18 @@ update_budding_history <- function(budd_hist, change_rate = 0.05, budding_prob =
             ## Take one step on the scaler based on the change_rate and the value of the previous scaler.
             ## If the change_rate is 0.0, then this scaler will always be 1.0 and the model will be time-homogeneous.
             if( decay_fn ){
-                start_scaler <- start_scaler / exp(change_rate * age_tmp)
+                chunk_scaler <- start_scaler / exp(change_rate * age_tmp)
             } else{
-                start_scaler <- start_scaler * exp(change_rate * age_tmp)
+                chunk_scaler <- start_scaler * exp(change_rate * age_tmp)
             }
             ## Scale the chunk of the branch:
             ## This will need to be stored in a copy of the tree, otherwise we will get wrong chunk ages.
-            rescaled_chunk_vec[w] <- rescaled_chunk_vec[w] * start_scaler
+            rescaled_chunk_vec[w] <- rescaled_chunk_vec[w] * chunk_scaler
         }
 
         ## Log the scaler value at the end of edge j.
         ## This substitutes the SCALER list.
-        scaler_edge_vec[j] <- start_scaler
+        scaler_edge_vec[j] <- chunk_scaler
 
         ## Update the branch of the rescaled tree. This will be the sum of the chunks.
         rescaled_tree$edge.length[j] <- sum( rescaled_chunk_vec )
@@ -337,6 +342,7 @@ update_branch_scaling <- function(budd_hist, tree, change_rate = 0.05, chunk_fra
     ## We will sample the scalers.
     scaler_edge_vec <- vector(mode = "numeric", length = nrow(tt$edge))
     scaler_edge_vec[root_id] <- 1.0 ## Starting scaler for either decay or positive lineage-age rates models.
+    start_scaler <- 1.0
 
     for(j in 1:nrow(tt$edge)){
 
@@ -347,14 +353,14 @@ update_branch_scaling <- function(budd_hist, tree, change_rate = 0.05, chunk_fra
         if( sum(ANCESTRY == ANCESTRY[j]) == 1 ){
             ## First time the lineage number appears in the ANCESTRY vector.
             ## New lineage, including the root edges.
-            start_scaler <- 1.0
+            ## start_scaler <- 1.0
             new_lineage <- TRUE
         } else{
             ## Mother lineage. Lineage already exists.
             ## The ancestral edge NEEDS to belong to the same continued lineage.
             ancestral_edge <- tt$edge[,2] == tt$edge[j,1]
             ## Same as line below, but here we just want the value at the end of the branch.
-            start_scaler <- scaler_edge_vec[ancestral_edge]
+            ## start_scaler <- scaler_edge_vec[ancestral_edge]
             ## start_scaler <- get_des_scaler(scaler = SCALER, id = ancestral_edge)
             new_lineage <- FALSE
         }
@@ -367,18 +373,18 @@ update_branch_scaling <- function(budd_hist, tree, change_rate = 0.05, chunk_fra
             ## Take one step on the scaler based on the change_rate and the value of the previous scaler.
             ## If the change_rate is 0.0, then this scaler will always be 1.0 and the model will be time-homogeneous.
             if( decay_fn ){
-                start_scaler <- start_scaler / exp(change_rate * age_tmp)
+                chunk_scaler <- start_scaler / exp(change_rate * age_tmp)
             } else{
-                start_scaler <- start_scaler * exp(change_rate * age_tmp)
+                chunk_scaler <- start_scaler * exp(change_rate * age_tmp)
             }
             ## Scale the chunk of the branch:
             ## This will need to be stored in a copy of the tree, otherwise we will get wrong chunk ages.
-            rescaled_chunk_vec[w] <- rescaled_chunk_vec[w] * start_scaler
+            rescaled_chunk_vec[w] <- rescaled_chunk_vec[w] * chunk_scaler
         }
 
         ## Log the scaler value at the end of edge j.
         ## This substitutes the SCALER list.
-        scaler_edge_vec[j] <- start_scaler
+        scaler_edge_vec[j] <- chunk_scaler
 
         ## Update the branch of the rescaled tree. This will be the sum of the chunks.
         rescaled_tree$edge.length[j] <- sum( rescaled_chunk_vec )

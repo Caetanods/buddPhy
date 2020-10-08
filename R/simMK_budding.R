@@ -55,16 +55,26 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
     ## Check for the cladogenetic options:
     cladogenetic_change <- match.arg(arg = cladogenetic_change, choices=c("none","flat", "prob"), several.ok = FALSE)
 
-    ## Check if ancestral state is within states on the Q matrix:
-    if( !is.null(anc) ){
-        options_state <- rownames(Q)
-        anc <- match.arg(arg = anc, choices = options_state, several.ok = FALSE)
-    }
-
     ## Define the size of the chunks to be used for the simulation.
     chunk_length <- vcv.phylo(tree)[1,1] / 1000 ## 1000 pieces of tree age.
 
-    ss <- rownames(Q)
+    ## Get the names for the states or return error message if fail.
+    if( is.null(rownames(Q)) ){
+        if( is.null(colnames(Q)) ){
+            stop( "Q needs rownames or colnames equal to the states in the data." )
+        } else{
+            ss <- colnames(Q)
+        }
+    } else{
+        ss <- rownames(Q)
+    }
+
+    ## Check if ancestral state is within states on the Q matrix:
+    if( !is.null(anc) ){
+        options_state <- ss
+        anc <- match.arg(arg = anc, choices = options_state, several.ok = FALSE)
+    }
+
     tt <- reorder.phylo(tree) ## reorder the tree cladewise.
     ## P <- vector(mode = "list", length = nrow(tt$edge))
     ## Need a 'maps' list in the same format as 'phytools' 'simmap' object.
@@ -94,6 +104,8 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
     ## The root have rate scaler of 1.0 because the history of the clade has just started. The rate scaler just after speciation (of a new lineage) will also be 1.0
     ## Note that 1.0 will be the highest scaler when decay_fn=TRUE and the lowest when decay_fn=FALSE. But in either case the starting scaler will be the same.
     SCALER[root_id] <- 1.0 ## These are the root lineages, they will start with 1.0 as the scaler.
+    ## Starting point for the rate scaler is a constant.
+    start_scaler <- 1.0
 
     ## Create a matrix for the storage of the rate scalers associated with the age.
     mat_scaler <- matrix(data = NA, nrow = 1, ncol = 3)
@@ -117,13 +129,13 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
         ## This will need to change depending on the type of model. Each model will have a step function and a starting state.
         if( sum(ANCESTRY == ANCESTRY[j]) == 1 ){ ## First time the lineage number appears in the ANCESTRY vector.
             ## New lineage, including the root edges.
-            start_scaler <- 1.0
+            ## start_scaler <- 1.0
             new_lineage <- TRUE
         } else{
             ## Mother lineage. Lineage already exists.
             ## The ancestral edge NEEDS to belong to the same continued lineage.
             ancestral_edge <- tt$edge[,2] == tt$edge[j,1]
-            start_scaler <- get_des_scaler(scaler = SCALER, id = ancestral_edge)
+            ## start_scaler <- get_des_scaler(scaler = SCALER, id = ancestral_edge)
             new_lineage <- FALSE
         }
 
@@ -132,24 +144,25 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
             chunk_sum <- ifelse(test = w == 1, yes = 0, no = sum(chunk_vec[1:(w-1)]) )
             ## get_chunk_age will compute the age of the current chunk following the trajectory of the current lineage.
             age_tmp <- get_chunk_age(tree = tt, current_node = tt$edge[j,1], chunk_length = chunk_vec[w]
-                                         , chunk_sum = chunk_sum, lineage_number = ANCESTRY[j], ancestry = ANCESTRY)
+                                     , chunk_sum = chunk_sum, lineage_number = ANCESTRY[j]
+                                     , ancestry = ANCESTRY)
             ## Take one step on the scaler based on the change_rate and the value of the previous scaler.
             ## If the change_rate is 0.0, then this scaler will always be 1.0 and the model will be time-homogeneous.
             if( decay_fn ){
-                start_scaler <- start_scaler / exp(change_rate * age_tmp)
+                age_tmp_scaler <- start_scaler / exp(change_rate * age_tmp)
             } else{
                 ## Implements the positive relationship with time. Also exponential.
-                start_scaler <- start_scaler * exp(change_rate * age_tmp)
+                age_tmp_scaler <- start_scaler * exp(change_rate * age_tmp)
             }
             ## Scale the Q matrix and draw the new state after the chunk time.
-            Q_tmp <- expm(Q * chunk_vec[w] * start_scaler)
+            Q_tmp <- expm(Q * chunk_vec[w] * age_tmp_scaler)
             rownames(Q_tmp) <- colnames(Q_tmp) <- ss
             new_state <- ss[ which( rmultinom(n = 1, size = 1, prob = Q_tmp[start_state,] )[, 1] == 1) ]
             ## Log the state and the scaler values.
-            mat_scaler <- rbind(mat_scaler, c(new_lineage, age_tmp, start_scaler))
+            mat_scaler <- rbind(mat_scaler, c(new_lineage, age_tmp, age_tmp_scaler))
             chunk_state[w] <- new_state
             start_state <- new_state
-            chunk_scaler[w] <- start_scaler
+            chunk_scaler[w] <- age_tmp_scaler
         }
 
         ## Update the maps for the state and the scaler values.
@@ -196,7 +209,7 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
                     STATES[ii[ndrd[2]], 1] <- sample(x = budd_states, size = 1)
                 } else if( cladogenetic_change == "prob" ){
                     ## Change the trait state using the prob from the Q transition matrix.
-                    row_sub <- rownames(Q) == new
+                    row_sub <- ss == new
                     col_sub <- !row_sub
                     prob_shift <- Q[row_sub, col_sub] / sum( Q[row_sub, col_sub] )
                     STATES[ii[ndrd[2]], 1] <- sample(x = ss[col_sub], prob = prob_shift, size = 1)
@@ -219,7 +232,7 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
     x <- as.factor( setNames(object = xx_temp, nm = tt$tip.label) )
 
     ## Make the mapped.edge to complete to simmap object.
-    mapped.edge <- matrix(0, nrow = nrow(tt$edge), ncol = ncol(Q), dimnames = list(paste(tt$edge[,1],",",tt$edge[,2],sep=""), rownames(Q)))
+    mapped.edge <- matrix(0, nrow = nrow(tt$edge), ncol = ncol(Q), dimnames = list(paste(tt$edge[,1],",",tt$edge[,2],sep=""), ss))
     for(w in 1:length(maps) ){
         for(k in 1:length(maps[[w]]) ){
             mapped.edge[w,names(maps[[w]])[k]] <- mapped.edge[w,names(maps[[w]])[k]] + maps[[w]][k]
