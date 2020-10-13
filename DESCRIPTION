@@ -1,11 +1,13 @@
 Package: buddPhy
 Type: Package
-Title: Trait Evolution And Budding Speciation
+Title: Trait Evolution and Budding Speciation
 Version: 0.1.0
 Author: Daniel S. Caetano
 Maintainer: Daniel Caetano <caetanods1@gmail.com>
 Description: Package simulates lineage-age dependent models of trait evolution. Also implements estimation of such models.
 License: MIT + file LICENSE
+Imports: ape, expm, phytools
+Suggests: ratematrix
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.1.0
