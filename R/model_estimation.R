@@ -9,6 +9,7 @@
 #'
 #' @return a phylogenetic tree with rescaled branch lengths and reordered to "cladewise" order (see 'ape::reorder.phylo').
 #' @export
+#' @importFrom ape vcv.phylo reorder.phylo
 tree_rescale_exp <- function(change_rate = 0.05, budding_prob = 0.3, tree, chunk_fraction = 0.01, decay_fn = TRUE){
     ## FREE PARAMETERS: change_rate and budding_prob.
     ## tree, chunk_fraction, and decay_fn are constants in the model.
@@ -105,6 +106,7 @@ tree_rescale_exp <- function(change_rate = 0.05, budding_prob = 0.3, tree, chunk
 }
 
 ##' @noRd
+##' @importFrom ape vcv.phylo reorder.phylo
 initialize_budding_history <- function(tree, change_rate = 0.05, budding_prob = 0.3, chunk_fraction = 0.01, decay_fn = TRUE){
     ## Generates a random budding history from the prior.
     ## Returns budding nodes,ancestry, and the rescaled tree.
@@ -132,7 +134,7 @@ initialize_budding_history <- function(tree, change_rate = 0.05, budding_prob = 
 
     for (j in 1:nrow(tt$edge)){
         ## For each edge we use the scaling function to rescale the branch.
-        chunk_vec <- buddPhy:::get_chunk_vec(ll = tt$edge.length[j], chunk_length = chunk_length)
+        chunk_vec <- get_chunk_vec(ll = tt$edge.length[j], chunk_length = chunk_length)
         rescaled_chunk_vec <- chunk_vec ## Chunks to be rescaled.
 
         if( sum(ANCESTRY == ANCESTRY[j]) == 1 ){
@@ -154,7 +156,7 @@ initialize_budding_history <- function(tree, change_rate = 0.05, budding_prob = 
             ## Implement the lineage age function:
             chunk_sum <- ifelse(test = w == 1, yes = 0, no = sum(chunk_vec[1:(w-1)]) )
             ## get_chunk_age will compute the age of the current chunk.
-            age_tmp <- buddPhy:::get_chunk_age(tree = tt, current_node = tt$edge[j,1], chunk_length = chunk_vec[w], chunk_sum = chunk_sum, lineage_number = ANCESTRY[j], ancestry = ANCESTRY)
+            age_tmp <- get_chunk_age(tree = tt, current_node = tt$edge[j,1], chunk_length = chunk_vec[w], chunk_sum = chunk_sum, lineage_number = ANCESTRY[j], ancestry = ANCESTRY)
             ## Take one step on the scaler based on the change_rate and the value of the previous scaler.
             ## If the change_rate is 0.0, then this scaler will always be 1.0 and the model will be time-homogeneous.
             if( decay_fn ){
@@ -202,6 +204,8 @@ initialize_budding_history <- function(tree, change_rate = 0.05, budding_prob = 
 }
 
 ##' @noRd
+##' @importFrom phytools getDescendants
+##' @importFrom ape vcv.phylo reorder.phylo
 update_budding_history <- function(budd_hist, change_rate = 0.05, budding_prob = 0.3, tree, chunk_fraction = 0.01, decay_fn = TRUE, skip_shallow = TRUE){
     ## Choose a node, updates the history of the lineages descending this node.
     ## The other strategy would be to modify the current history. However, because all lineages are connected and the mother lineage history depends on the continuation of these lineages, it will be complicated, and arbitrary, the way that we modify them.
@@ -227,7 +231,7 @@ update_budding_history <- function(budd_hist, change_rate = 0.05, budding_prob =
     prop_nd <- sample(x = nodes_vec, size = 1)
 
     ## Find all the edges descending the sampled node.
-    des_nodes <- phytools::getDescendants(tree = tree, node = prop_nd)
+    des_nodes <- getDescendants(tree = tree, node = prop_nd)
     des_nodes <- des_nodes[ des_nodes > Ntip(tree) ]
     row_update <- which( edge[,1] %in% c(des_nodes, prop_nd) )
 
@@ -248,7 +252,7 @@ update_budding_history <- function(budd_hist, change_rate = 0.05, budding_prob =
     for(j in row_update){
 
         ## For each edge we use the scaling function to rescale the branch.
-        chunk_vec <- buddPhy:::get_chunk_vec(ll = tt$edge.length[j], chunk_length = chunk_length)
+        chunk_vec <- get_chunk_vec(ll = tt$edge.length[j], chunk_length = chunk_length)
         rescaled_chunk_vec <- chunk_vec ## Chunks to be rescaled.
 
         if( sum(ANCESTRY == ANCESTRY[j]) == 1 ){
@@ -270,7 +274,7 @@ update_budding_history <- function(budd_hist, change_rate = 0.05, budding_prob =
             ## Implement the lineage age function:
             chunk_sum <- ifelse(test = w == 1, yes = 0, no = sum(chunk_vec[1:(w-1)]) )
             ## get_chunk_age will compute the age of the current chunk.
-            age_tmp <- buddPhy:::get_chunk_age(tree = tt, current_node = tt$edge[j,1], chunk_length = chunk_vec[w], chunk_sum = chunk_sum, lineage_number = ANCESTRY[j], ancestry = ANCESTRY)
+            age_tmp <- get_chunk_age(tree = tt, current_node = tt$edge[j,1], chunk_length = chunk_vec[w], chunk_sum = chunk_sum, lineage_number = ANCESTRY[j], ancestry = ANCESTRY)
             ## Take one step on the scaler based on the change_rate and the value of the previous scaler.
             ## If the change_rate is 0.0, then this scaler will always be 1.0 and the model will be time-homogeneous.
             if( decay_fn ){
@@ -318,6 +322,7 @@ update_budding_history <- function(budd_hist, change_rate = 0.05, budding_prob =
 }
 
 ##' @noRd
+##' @importFrom ape vcv.phylo reorder.phylo
 update_branch_scaling <- function(budd_hist, tree, change_rate = 0.05, chunk_fraction = 0.01, decay_fn = TRUE){
     ## budd_hist is a list following the output from initialize_budding_history
     ## Keep the lineage history the same, but rescale the branch lengths.
@@ -347,7 +352,7 @@ update_branch_scaling <- function(budd_hist, tree, change_rate = 0.05, chunk_fra
     for(j in 1:nrow(tt$edge)){
 
         ## For each edge we use the scaling function to rescale the branch.
-        chunk_vec <- buddPhy:::get_chunk_vec(ll = tt$edge.length[j], chunk_length = chunk_length)
+        chunk_vec <- get_chunk_vec(ll = tt$edge.length[j], chunk_length = chunk_length)
         rescaled_chunk_vec <- chunk_vec ## Chunks to be rescaled.
 
         if( sum(ANCESTRY == ANCESTRY[j]) == 1 ){
@@ -369,7 +374,7 @@ update_branch_scaling <- function(budd_hist, tree, change_rate = 0.05, chunk_fra
             ## Implement the lineage age function:
             chunk_sum <- ifelse(test = w == 1, yes = 0, no = sum(chunk_vec[1:(w-1)]) )
             ## get_chunk_age will compute the age of the current chunk.
-            age_tmp <- buddPhy:::get_chunk_age(tree = tt, current_node = tt$edge[j,1], chunk_length = chunk_vec[w], chunk_sum = chunk_sum, lineage_number = ANCESTRY[j], ancestry = ANCESTRY)
+            age_tmp <- get_chunk_age(tree = tt, current_node = tt$edge[j,1], chunk_length = chunk_vec[w], chunk_sum = chunk_sum, lineage_number = ANCESTRY[j], ancestry = ANCESTRY)
             ## Take one step on the scaler based on the change_rate and the value of the previous scaler.
             ## If the change_rate is 0.0, then this scaler will always be 1.0 and the model will be time-homogeneous.
             if( decay_fn ){
@@ -421,6 +426,7 @@ re_build_Q <- function( q_vec, n_states, phytools = FALSE){
 }
 
 ##' @noRd
+##' @importFrom ape reorder.phylo
 get_edge <- function(hh){
     ## Need to transform the tree before getting the edge lengths to compute the likelihood.
     ## This function will help with the transformation.
@@ -448,7 +454,8 @@ get_edge <- function(hh){
 #'
 #' @return a list with the acceptance rate (accept), the likelihood (lik), the prior probabilities (prior), the transition rates (Q), the probability of budding speciation(budd), and the posterior distribution of the rate scalers (exp_rate).
 #' @export
-#'
+#' @importFrom ape reorder.phylo Nnode Ntip
+#' @importFrom phytools fitMk
 mcmc_mk_budd_exp <- function(phy, trait, k, prior_beta_Q = c(2,5), prior_beta_budd = c(2,5), prior_exp_rate = 1, sample_prob = c(0.25,0.25,0.25,0.25), Q_prop = 0.2, budd_prop = 0.2, rate_prop = 0.2, gen = 100){
     ## Order of sampling: c("Q","budd_prob","rate_fn","history")
 
@@ -456,7 +463,7 @@ mcmc_mk_budd_exp <- function(phy, trait, k, prior_beta_Q = c(2,5), prior_beta_bu
     sample_prob <- sample_prob / sum(sample_prob)
 
     ## Prepare constants to run ratematrix likelihood function.
-    phy <- ape::reorder.phylo(x = phy, order = "postorder")
+    phy <- reorder.phylo(x = phy, order = "postorder")
     n_nodes <- Nnode(phy)
     n_states <- length(k)
     n_tips <- Ntip(phy)
@@ -480,7 +487,7 @@ mcmc_mk_budd_exp <- function(phy, trait, k, prior_beta_Q = c(2,5), prior_beta_bu
 
     ## Starting point ####
     ## Using MLE to get a quick estimate of the rates.
-    start_mk <- phytools::fitMk(tree = phy, x = trait, model = "ER")
+    start_mk <- fitMk(tree = phy, x = trait, model = "ER")
     Q_chain[1,] <- rep(start_mk$rates, times = k_matrix)
     budd_chain[1] <- rbeta(n = 1, shape1 = prior_beta_budd[1], shape2 = prior_beta_budd[2])
     exp_rate_chain[1] <- rexp(n = 1, rate = prior_exp_rate)
@@ -488,10 +495,10 @@ mcmc_mk_budd_exp <- function(phy, trait, k, prior_beta_Q = c(2,5), prior_beta_bu
 
     ## Get the starting point for the edge.length. Need to transform the tree.
     ## Here we also get the current state of the lineage history.
-    hist_curr <- buddPhy:::initialize_budding_history(tree = phy, change_rate = exp_rate_chain[1]
-                                                      , budding_prob = budd_chain[1]
-                                                      , chunk_fraction = 0.01, decay_fn = TRUE)
-    edge_chain[1,] <- buddPhy:::get_edge(hh = hist_curr)
+    hist_curr <- initialize_budding_history(tree = phy, change_rate = exp_rate_chain[1]
+                                            , budding_prob = budd_chain[1]
+                                            , chunk_fraction = 0.01, decay_fn = TRUE)
+    edge_chain[1,] <- get_edge(hh = hist_curr)
 
     ## The prior probability for the Q rates is a scaled beta distribution.
     q_scale <- start_mk$rates * 10 ## Max value for the rates.
@@ -507,9 +514,9 @@ mcmc_mk_budd_exp <- function(phy, trait, k, prior_beta_Q = c(2,5), prior_beta_bu
     ## edge_len and Q are estimated. Need to rebuild Q to get the likelihood.
     log_lik_chain[1] <- ratematrix:::logLikMk_C(n_nodes = n_nodes, n_tips = n_tips
                                                 , n_states = n_states
-                                                , edge_len = buddPhy:::get_edge(hh = hist_curr)
+                                                , edge_len = get_edge(hh = hist_curr)
                                                 , edge_mat = edge_mat, parents = parents, X = X
-                                                , Q = buddPhy:::re_build_Q(Q_chain[1,], n_states)
+                                                , Q = re_build_Q(Q_chain[1,], n_states)
                                                 , root_node = root_node, root_type = root_type)
 
     log_prior_chain[1] <- prior_fn(q_vec = Q_chain[1,], budd = budd_chain[1], rate = exp_rate_chain[1])
@@ -539,9 +546,9 @@ mcmc_mk_budd_exp <- function(phy, trait, k, prior_beta_Q = c(2,5), prior_beta_bu
             lik_curr <- log_lik_chain[i-1]
             lik_prop <- ratematrix:::logLikMk_C(n_nodes = n_nodes, n_tips = n_tips
                                                 , n_states = n_states
-                                                , edge_len = buddPhy:::get_edge(hh = hist_curr)
+                                                , edge_len = get_edge(hh = hist_curr)
                                                 , edge_mat = edge_mat, parents = parents, X = X
-                                                , Q = buddPhy:::re_build_Q(Q_chain_prop, n_states)
+                                                , Q = re_build_Q(Q_chain_prop, n_states)
                                                 , root_node = root_node, root_type = root_type)
             prior_curr <- log_prior_chain[i-1]
             prior_prop <- prior_fn(q_vec = Q_chain_prop, budd = budd_chain[i-1], rate = exp_rate_chain[i-1])
@@ -556,15 +563,15 @@ mcmc_mk_budd_exp <- function(phy, trait, k, prior_beta_Q = c(2,5), prior_beta_bu
             budd_mult_prop <- ratematrix:::multiplierProposal(x = budd_chain[i-1], a = budd_prop)
             budd_update <- budd_mult_prop[1]
             ## Update the entire history given the new value of the budding parameter.
-            hist_prop <- buddPhy:::initialize_budding_history(tree = phy, change_rate = exp_rate_chain[i-1]
-                                                              , budding_prob = budd_update
-                                                              , chunk_fraction = 0.01, decay_fn = TRUE)
+            hist_prop <- initialize_budding_history(tree = phy, change_rate = exp_rate_chain[i-1]
+                                                    , budding_prob = budd_update
+                                                    , chunk_fraction = 0.01, decay_fn = TRUE)
             ## Odds ratio: ####
             lik_curr <- log_lik_chain[i-1]
             lik_prop <- ratematrix:::logLikMk_C(n_nodes = n_nodes, n_tips = n_tips, n_states = n_states
-                                                , edge_len = buddPhy:::get_edge(hh = hist_prop)
+                                                , edge_len = get_edge(hh = hist_prop)
                                                 , edge_mat = edge_mat, parents = parents, X = X
-                                                , Q = buddPhy:::re_build_Q( Q_chain[i-1,], n_states)
+                                                , Q = re_build_Q( Q_chain[i-1,], n_states)
                                                 , root_node = root_node, root_type = root_type)
             prior_curr <- log_prior_chain[i-1]
             prior_prop <- prior_fn(q_vec = Q_chain[i-1,], budd = budd_update, rate = exp_rate_chain[i-1])
@@ -579,15 +586,15 @@ mcmc_mk_budd_exp <- function(phy, trait, k, prior_beta_Q = c(2,5), prior_beta_bu
             exp_rate_mult_prop <- ratematrix:::multiplierProposal(x = exp_rate_chain[i-1], a = rate_prop)
             exp_rate_update <- exp_rate_mult_prop[1]
             ## Need to update only the branch scale, keeping the lineage history constant.
-            hist_prop <- buddPhy:::update_branch_scaling(budd_hist = hist_curr, tree = phy
-                                                         , change_rate = exp_rate_update
-                                                         , chunk_fraction = 0.01, decay_fn = TRUE)
+            hist_prop <- update_branch_scaling(budd_hist = hist_curr, tree = phy
+                                               , change_rate = exp_rate_update
+                                               , chunk_fraction = 0.01, decay_fn = TRUE)
             ## Odds ratio: ####
             lik_curr <- log_lik_chain[i-1]
             lik_prop <- ratematrix:::logLikMk_C(n_nodes = n_nodes, n_tips = n_tips, n_states = n_states
-                                                , edge_len = buddPhy:::get_edge(hh = hist_prop)
+                                                , edge_len = get_edge(hh = hist_prop)
                                                 , edge_mat = edge_mat, parents = parents, X = X
-                                                , Q = buddPhy:::re_build_Q( Q_chain[i-1,], n_states)
+                                                , Q = re_build_Q( Q_chain[i-1,], n_states)
                                                 , root_node = root_node, root_type = root_type)
             prior_curr <- log_prior_chain[i-1]
             prior_prop <- prior_fn(q_vec = Q_chain[i-1,], budd = budd_chain[i-1], rate = exp_rate_update)
@@ -601,16 +608,16 @@ mcmc_mk_budd_exp <- function(phy, trait, k, prior_beta_Q = c(2,5), prior_beta_bu
         } else if(par.update == "history"){
             ## Here we are just updating the history by changing the map on some nodes only.
             ## Note that all nodes descending the one chosen are also updated. So many nodes can be updated.
-            hist_prop <- buddPhy:::update_budding_history(budd_hist = hist_curr, tree = phy
-                                                          , change_rate = exp_rate_chain[i-1]
-                                                          , budding_prob = budd_chain[i-1]
-                                                          , chunk_fraction = 0.01, decay_fn = TRUE)
+            hist_prop <- update_budding_history(budd_hist = hist_curr, tree = phy
+                                                , change_rate = exp_rate_chain[i-1]
+                                                , budding_prob = budd_chain[i-1]
+                                                , chunk_fraction = 0.01, decay_fn = TRUE)
             ## Odds ratio: ####
             lik_curr <- log_lik_chain[i-1]
             lik_prop <- ratematrix:::logLikMk_C(n_nodes = n_nodes, n_tips = n_tips, n_states = n_states
-                                                , edge_len = buddPhy:::get_edge(hh = hist_prop)
+                                                , edge_len = get_edge(hh = hist_prop)
                                                 , edge_mat = edge_mat, parents = parents, X = X
-                                                , Q = buddPhy:::re_build_Q( Q_chain[i-1,], n_states)
+                                                , Q = re_build_Q( Q_chain[i-1,], n_states)
                                                 , root_node = root_node, root_type = root_type)
             prior_curr <- log_prior_chain[i-1]
             prior_prop <- prior_fn(q_vec = Q_chain[i-1,], budd = budd_chain[i-1], rate = exp_rate_chain[i-1])
