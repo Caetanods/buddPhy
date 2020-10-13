@@ -53,7 +53,9 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
     if( budding_prob == 0.0 ) budding_mother <- 0.0
 
     ## Check for the cladogenetic options:
-    cladogenetic_change <- match.arg(arg = cladogenetic_change, choices=c("none","flat", "prob"), several.ok = FALSE)
+    cladogenetic_change <- match.arg(arg = cladogenetic_change
+                                     , choices=c("none","flat", "prob")
+                                     , several.ok = FALSE)
 
     ## Define the size of the chunks to be used for the simulation.
     chunk_length <- vcv.phylo(tree)[1,1] / 1000 ## 1000 pieces of tree age.
@@ -232,7 +234,8 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
     x <- as.factor( setNames(object = xx_temp, nm = tt$tip.label) )
 
     ## Make the mapped.edge to complete to simmap object.
-    mapped.edge <- matrix(0, nrow = nrow(tt$edge), ncol = ncol(Q), dimnames = list(paste(tt$edge[,1],",",tt$edge[,2],sep=""), ss))
+    mapped.edge <- matrix(0, nrow = nrow(tt$edge), ncol = ncol(Q)
+                          , dimnames = list(paste(tt$edge[,1],",",tt$edge[,2],sep=""), ss))
     for(w in 1:length(maps) ){
         for(k in 1:length(maps[[w]]) ){
             mapped.edge[w,names(maps[[w]])[k]] <- mapped.edge[w,names(maps[[w]])[k]] + maps[[w]][k]
@@ -257,6 +260,7 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
 ## Function matches the edge matrix of the phylogeny with the states matrix from the budding simulation.
 ## Then returns the nodes where budding speciation was simulated to have happened.
 ##' @noRd
+##' @importFrom ape Ntip
 get_budding_nodes <- function(simMK){
     tree <- simMK$simmap
     phy_edge <- tree$edge
@@ -309,7 +313,13 @@ get_edge_color_lineages <- function(simMK, base_color = "gray"){
     color_pool <- unique( gsub(pattern = "[[:digit:]]+", replacement = "", x = color_pool) )
     ## Exclude the base color and any of its variants.
     color_pool <- color_pool[ -grep(pattern = base_color, x = color_pool) ]
-    mother_palette <- sample(x = color_pool, size = length(mother_lineages), replace = FALSE)
+    if( length(mother_lineages) > length( color_pool ) ){
+        ## Protect for really large phylogenies.
+        mult_color <- ceiling( length(mother_lineages) / length( color_pool ) )
+        mother_palette <- c( sapply(1:mult_color, function(i) sample(x = color_pool, size = length(color_pool), replace = FALSE) ) )
+    } else{
+        mother_palette <- sample(x = color_pool, size = length(mother_lineages), replace = FALSE)
+    }
     edge_colors <- rep(base_color, times = nrow(simMK$simmap$edge) )
     for( mm in 1:length(mother_lineages) ){
         edge_colors[ simMK$ancestry == mother_lineages[mm] ] <- mother_palette[mm]
