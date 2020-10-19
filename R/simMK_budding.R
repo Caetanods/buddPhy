@@ -291,6 +291,7 @@ get_chunk_vec <- function(ll, chunk_length){
 }
 
 ##' @noRd
+##' @importFrom ape node.depth.edgelength
 get_chunk_age <- function(tree, current_node, chunk_length, chunk_sum, lineage_number, ancestry){
     ## Compute the age of the lineage so far.
     ## This is in the same unit as the edge lengths of the tree.
