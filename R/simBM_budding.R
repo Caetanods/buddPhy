@@ -35,7 +35,8 @@ sim_BM_budding_exp <- function(tree, sigma, anc = 0.0, budding_prob = 0.0, buddi
     if( budding_prob == 0.0 ) budding_mother <- 0.0
 
     ## Define the size of the chunks to be used for the simulation.
-    chunk_length <- vcv.phylo(tree)[1,1] / 1000 ## 1000 pieces of tree age.
+    ## Max age helps to deal with non-ultrametric trees.
+    chunk_length <- max( diag( vcv.phylo(tree) ) ) / 1000 ## 1000 pieces of tree age.
 
     tt <- reorder.phylo(tree) ## reorder the tree cladewise.
     ## Need a 'maps' list in the same format as 'phytools' 'simmap' object.

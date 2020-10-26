@@ -58,7 +58,8 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
                                      , several.ok = FALSE)
 
     ## Define the size of the chunks to be used for the simulation.
-    chunk_length <- vcv.phylo(tree)[1,1] / 1000 ## 1000 pieces of tree age.
+    ## Max age helps to deal with non-ultrametric trees.
+    chunk_length <- max( diag( vcv.phylo(tree) ) ) / 1000 ## 1000 pieces of tree age.
 
     ## Get the names for the states or return error message if fail.
     if( is.null(rownames(Q)) ){
