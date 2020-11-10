@@ -8,6 +8,12 @@
 #' @export
 make_phylip_data <- function(data, states, file = "biogeobears_data.txt"){
     ## Function to produce phylip file to use in BioGeoBEARS.
+
+    ## Check if file already exists and give a warning.
+    if( file.exists(file.path(file)) ){
+        stop( "File already exists. Will not overwrite it." )
+    }
+
     outfile <- file(file.path(file), open="a")
     ## data is a named string with the states.
 
