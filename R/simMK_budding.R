@@ -73,25 +73,21 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
     }
 
     ## Check if ancestral state is within states on the Q matrix:
+    ## Set the root value for the simulation based on the arguments for the function.
     if( !is.null(anc) ){
         options_state <- ss
-        anc <- match.arg(arg = anc, choices = options_state, several.ok = FALSE)
+        a <- match.arg(arg = anc, choices = options_state, several.ok = FALSE)
+    } else{
+        a <- sample(ss, 1)
     }
-
     tt <- reorder.phylo(tree) ## reorder the tree cladewise.
     ## P <- vector(mode = "list", length = nrow(tt$edge))
     ## Need a 'maps' list in the same format as 'phytools' 'simmap' object.
     maps <- vector(mode = "list", length = nrow(tt$edge))
 
-    ## Set the root value for the simulation based on the arguments for the function.
-    if (is.null(anc)){
-        a <- sample(ss, 1)
-    } else{
-        a <- anc
-    }
-
-    ## For each edge of the tree we need an starting and an ending state.
+    ## For each edge of the tree we need an starting (corners) and an ending state (node).
     STATES <- matrix(NA, nrow(tt$edge), 2)
+
     ## For each edge of the tree we need a number to keep track of the lineage.
     ANCESTRY <- vector(mode = "numeric", length = nrow(tt$edge) )
 
