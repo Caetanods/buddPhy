@@ -99,16 +99,25 @@ collapse_singles_track_nodes <- function(tree, phy_edge){
 #'
 #' @return a list with the pruned phylogeny and a table with the matching nodes
 #' @export
-#' @importFrom ape is.rooted reorder.phylo
+#' @importFrom ape is.rooted reorder.phylo is.ultrametric
 #' @importFrom FossilSim prune.fossil.tips
 drop_fossils_track_node <- function(phy){
     ## Drop fossil lineages and track the correspondence between the nodes.
+
+    ## If ultrametric, then return the original phylogeny.
+    if( is.ultrametric( phy ) ){
+        warning( "phy is already ultrametric, returning the phylogeny." )
+        return( list(pruned_phy = phy, node_table = NA) )
+    }
 
     ## Add defaults.
     trim.internal <- TRUE
     subtree <- FALSE
     rooted <- is.rooted(phy)
     collapse.singles <- TRUE
+
+    ## Keep copy of original tip.labels:
+    og_tip_labels <- phy$tip.label
 
     ## Find the fossil tips to drop.
     ext_phy <- prune.fossil.tips(tree = phy)
@@ -198,8 +207,19 @@ drop_fossils_track_node <- function(phy){
     coll_list <- collapse_singles_track_nodes(tree = phy, phy_edge = phy_edge)
 
     ## Make the correspondence node matrix
-    corr_mat <- unique(coll_list$phy_edge[,c(3,1)])
+    corr_mat <- unique( coll_list$phy_edge[,c(3,1)] )
     corr_dat <- data.frame(old_nodes = corr_mat[,1], new_nodes = corr_mat[,2])
+    ## Make sure it is ordered in function of the new nodes.
+    corr_dat <- corr_dat[order(corr_dat$new_nodes),]
+
+    ## Create a matching table of tips to append.
+    new_tip_labels <- coll_list$phy$tip.label
+    old_tips <- sapply(new_tip_labels, function(x) which( x == og_tip_labels ))
+    match_tips <- data.frame(old_nodes = unname(old_tips)
+                             , new_nodes = 1:length(new_tip_labels))
+
+    ## Make a complete table, including the corresponce among the tips.
+    corr_dat <- rbind(corr_dat, match_tips)
 
     return( list(pruned_phy = coll_list$phy, node_table = corr_dat) )
 }
