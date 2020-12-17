@@ -107,7 +107,7 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
     start_scaler <- 1.0
 
     ## Create a matrix for the storage of the rate scalers associated with the age.
-    mat_scaler <- matrix(data = NA, nrow = 1, ncol = 3)
+    mat_scaler <- matrix(data = NA, nrow = 1, ncol = 4)
 
     for (j in 1:nrow(tt$edge)){
 
@@ -128,13 +128,11 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
         ## This will need to change depending on the type of model. Each model will have a step function and a starting state.
         if( sum(ANCESTRY == ANCESTRY[j]) == 1 ){ ## First time the lineage number appears in the ANCESTRY vector.
             ## New lineage, including the root edges.
-            ## start_scaler <- 1.0
             new_lineage <- TRUE
         } else{
             ## Mother lineage. Lineage already exists.
             ## The ancestral edge NEEDS to belong to the same continued lineage.
             ancestral_edge <- tt$edge[,2] == tt$edge[j,1]
-            ## start_scaler <- get_des_scaler(scaler = SCALER, id = ancestral_edge)
             new_lineage <- FALSE
         }
 
@@ -158,7 +156,7 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
             rownames(Q_tmp) <- colnames(Q_tmp) <- ss
             new_state <- ss[ which( rmultinom(n = 1, size = 1, prob = Q_tmp[start_state,] )[, 1] == 1) ]
             ## Log the state and the scaler values.
-            mat_scaler <- rbind(mat_scaler, c(new_lineage, age_tmp, age_tmp_scaler))
+            mat_scaler <- rbind(mat_scaler, c(new_lineage, age_tmp, chunk_vec[w], age_tmp_scaler))
             chunk_state[w] <- new_state
             start_state <- new_state
             chunk_scaler[w] <- age_tmp_scaler
@@ -247,31 +245,36 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
     class( tt ) <- c( class( tt ), "simmap" )
 
     ## Temporary object to return the rate scalers.
-    colnames( mat_scaler ) <- c("new_lineage", "age", "scaler")
+    colnames( mat_scaler ) <- c("new_lineage", "age", "chunk_length", "scaler")
 
     return( list(simmap = tt, tip_state = x, edge_state = STATES
                  , ancestry = ANCESTRY, rate_scaler_maps = SCALER
                  , scaler_mat = mat_scaler) )
 }
 
-## Function matches the edge matrix of the phylogeny with the states matrix from the budding simulation.
-## Then returns the nodes where budding speciation was simulated to have happened.
-##' @noRd
-##' @importFrom ape Ntip
-get_budding_nodes <- function(simMK){
-    tree <- simMK$simmap
-    phy_edge <- tree$edge
-    state_edge <- simMK$edge_state
-    root_node <- Ntip( tree ) + 1
-    max_node <- max( phy_edge[,1] )
-    budding_node <- vector(mode = "logical", length = length(root_node:max_node) )
-    nodes <- root_node:max_node
-    for( nd in 1:length(nodes) ){
-        node_pos <- which( phy_edge[,1] == nodes[nd] )
-        ## If a single occurrence, then 0. If 2 or more occurrences (therefore the lineage survived speciation) then it is >0 (transformed into TRUE).
-        budding_node[nd] <- as.logical( length( unique( state_edge[node_pos,1] ) ) - 1 )
+#' Extract budding history from simulations
+#'
+#' This function can be used to extract the history of budding events across the branches and nodes of the tree.
+#'
+#' @param sim_Mk A simulation object generated with 'sim_Mk_budding_exp'
+#'
+#' @return a list. budd_nodes are the nodes representing budding speciation events. budd_edges is an index, in the same order of phy$edge, selecting all branches belonging to mother lineages. A mother lineage is a lineage that survived one or more speciation events (because of budding).
+#' @export
+get_Budding_History <- function(sim_Mk){
+    ## The budd_nodes show each node that a budding speciation event happened.
+    ## The budd_edges marks all edges with a mother lineage (lineages that survived at least one speciation event.
+    budd_lineages <- unique( sim_Mk$ancestry[duplicated(sim_Mk$ancestry)] )
+    budd_nodes <- vector(mode = "numeric")
+    budd_edges <- rep(x = FALSE, times = length(sim_Mk$ancestry) )
+    for( i in budd_lineages ){
+        anc_id <- sim_Mk$ancestry == i
+        budd_edges <- anc_id | budd_edges ## This will update the budd_edges correctly.
+        budd_id_nd <- duplicated( c( sim_Mk$simmap$edge[anc_id,] ) )
+        budd_nodes <- append(x = budd_nodes
+                             , values = c( sim_Mk$simmap$edge[anc_id,] )[budd_id_nd]
+                             , after = length(budd_nodes) )
     }
-    return( setNames(object = budding_node, nm = nodes) )
+    return( list(budd_nodes = budd_nodes, budd_edges = budd_edges) )
 }
 
 ## A simple function to create a vector with the chunks.
@@ -350,7 +353,6 @@ get_des_scaler <- function(scaler, id){
 #' @export
 #' @importFrom ape plot.phylo
 plot_mother_lineages <- function(sim_obj, background_color = "gray", edge_width = 3, no_margin = TRUE){
-    bud_nodes <- get_budding_nodes(simMK = sim_obj)
     edge_colors <- get_edge_color_lineages(simMK = sim_obj, base_color = background_color)
     plot.phylo(x = sim_obj$simmap, edge.color = edge_colors, edge.width = edge_width, no.margin = no_margin)
 }
