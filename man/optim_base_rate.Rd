@@ -4,16 +4,16 @@
 \alias{optim_base_rate}
 \title{Adjust average rate under budding speciation}
 \usage{
-optim_base_rate(simMK, target_mean_rate)
+optim_base_rate(sim, target_mean_rate)
 }
 \arguments{
-\item{simMK}{the output from ‘sim_Mk_budding_exp’ or ‘sim_Mk_trace_history’}
+\item{sim}{the output from ‘sim_Mk_budding_exp’, ‘sim_Mk_trace_history’, ‘sim_BM_budding_exp’, or ‘sim_BM_trace_history’}
 
-\item{target_mean_rate}{a numeric value. The target average rate of trait evolution. At the moment, this function only allows for equal rates (ER) models.}
+\item{target_mean_rate}{a numeric value. The target average rate of trait evolution. For discrete traits, this is the equal rates model (ER).}
 }
 \value{
 The base rate parameter which will produce the target average rate.
 }
 \description{
-Budding speciation combined with lineage-age dependent trait evolution will cause the rates of trait evolution to vary across the branches of the tree. This function allows one to adjust the base rate used to simulate traits given a target average rate. This function requires the previous usage of ‘sim_Mk_budding_exp’ or ‘sim_Mk_trace_history’. It is useful to create multiple scenarios of trait evolution while making sure that the average rate across the branch of the tree remains the same.
+Budding speciation combined with lineage-age dependent trait evolution will cause the rates of trait evolution to vary across the branches of the tree. This function allows one to adjust the base rate used to simulate traits given a target average rate. This function requires the previous usage of ‘sim_Mk_budding_exp’, ‘sim_Mk_trace_history’, ‘sim_BM_budding_exp’, or ‘sim_BM_trace_history’. It is useful to create multiple scenarios of trait evolution while making sure that the average rate across the branch of the tree remains the same.
 }

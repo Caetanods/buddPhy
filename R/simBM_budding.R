@@ -350,30 +350,3 @@ sim_BM_trace_history <- function(sim_BM, sigma, anc = 0.0, change_rate = 2.0, de
                  , scaler_mat = mat_scaler, maps = maps) )
 }
 
-#' Adjust average rate under budding speciation for continuous traits
-#'
-#' Budding speciation combined with lineage-age dependent trait evolution will cause the rates of trait evolution to vary across the branches of the tree. This function allows one to adjust the base rate used to simulate continuous traits given a target average rate. This function requires the previous usage of ‘sim_BM_budding_exp’ or ‘sim_BM_trace_history’. It is useful to create multiple scenarios of trait evolution while making sure that the average rate across the branch of the tree remains the same.
-#' @param simBM the output from ‘sim_BM_budding_exp’ or ‘sim_BM_trace_history’
-#' @param target_mean_rate a numeric value. The target average rate of trait evolution along the branches of the phylogeny.
-#'
-#' @return The base rate parameter which will produce the target average rate.
-#' @export
-#'
-#' @importFrom stats optim
-optim_BM_base_rate <- function(simBM, target_mean_rate){
-    ## Initial state for the search
-    init_par <- runif(n = 1, min = 0.00001, max = 10)
-    ## Extract the history from the simulation
-    hist_mat <- simBM$scaler_mat[-1,]
-    ## The function to be optimized
-    dist_fn <- function(par){
-        wgt_avg <- apply(X = hist_mat, MARGIN = 1, FUN = function(x) x["chunk_length"] * x["scaler"] * par)
-        obs_mean_rate <- sum( wgt_avg ) / sum(hist_mat[,"chunk_length"])
-        dist <- sqrt( (target_mean_rate - obs_mean_rate)^2 )
-        return( dist )
-    }
-    ## Run a search
-    res <- optim(par = init_par, fn = dist_fn, gr = NULL, method = "Brent", lower = 0.0000001, upper = 100.0)
-    return( res )
-}
-
