@@ -1,18 +1,3 @@
-## Many of these functions are based on Liam's code for stochastic mapping in phytools.
-
-## How should we compute the chunk length? Chunk length is only necessary for models with some age_fn. If Q is constant, then we can use the exp to get the waiting time until the next event (just like a standard MK model). If Q is going to change at each chunk following some age_fn, then we need to simulate the trait at time t after delta_t. Meaning that each chunk will be the branch between two pseudo-nodes and will have some rate multiplier applied to that chunk (controlled by the age_fn).
-
-## #######################################################
-## EXPANDING THE FUNCTION
-## The type of decay function and/or increase in rate of trait evolution with lineage-age can be expanded. Here I will create one function for each type of lineage-age relationship. It is simpler.
-## Need to add a probability of autocorrelation among the budding events. How likely is a budding event to follow another one.
-
-## Function to simulate discrete traits under budding speciation.
-## Multiple factors control the simulation and the probability of budding.
-## Function keeps track of the ancestral and descendant lineages.
-## Ideally we want a general function that can take any age function to make the simulation.
-## Here we implemented an exponential decay function with the "change_rate" parameter. This simulates an exponential negative relationship between lineage-age and the rate of trait evolution.
-
 #' Simulate discrete trait evolution with budding and exponential decay function.
 #'
 #' This function adds a probability of budding speciation and allows only for a negative relationship between rates of trait evolution and lineage-age. Function also allows for cladogenetic change in the trait (a deterministic change in the state of the trait after budding speciation happens).
@@ -229,8 +214,6 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
     x <- as.factor( setNames(object = xx_temp, nm = tt$tip.label) )
 
     ## Make the mapped.edge to complete to simmap object.
-    mapped.edge <- matrix(0, nrow = nrow(tt$edge), ncol = ncol(Q)
-                          , dimnames = list(paste(tt$edge[,1],",",tt$edge[,2],sep=""), ss))
     for(w in 1:length(maps) ){
         for(k in 1:length(maps[[w]]) ){
             mapped.edge[w,names(maps[[w]])[k]] <- mapped.edge[w,names(maps[[w]])[k]] + maps[[w]][k]
