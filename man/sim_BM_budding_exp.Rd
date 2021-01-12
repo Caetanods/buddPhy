@@ -2,7 +2,7 @@
 % Please edit documentation in R/simBM_budding.R
 \name{sim_BM_budding_exp}
 \alias{sim_BM_budding_exp}
-\title{Simulate continuous traits under a lineage-age dependent model}
+\title{Simulate continuous trait evolution with budding and exponential decay function.}
 \usage{
 sim_BM_budding_exp(
   tree,
@@ -11,7 +11,8 @@ sim_BM_budding_exp(
   budding_prob = 0,
   budding_mother = NA,
   change_rate = 2,
-  decay_fn = TRUE
+  decay_fn = TRUE,
+  jump_size = NA
 )
 }
 \arguments{
@@ -28,10 +29,16 @@ sim_BM_budding_exp(
 \item{change_rate}{the rate for an exponential reduction of the rate of trait evolution proportional to lineage-age.}
 
 \item{decay_fn}{TRUE or FALSE. If TRUE, then the rate of trait evolution has a negative (exponential) relationship with lineage-age. If FALSE, then this relationship becomes positive.}
+
+\item{jump_size}{controls the size of the cladogenetic change associated with budding speciation. The new lineage will have an average trait value shifted by a proportion equal to 'jump_size'. For example, 'jump_size = 0.5' will cause the new lineages to start with an average trait value equal to 50\% above or below the current trait value. Setting to NA (default) will turn-off the option of cladogenetic trait changes.}
 }
 \value{
 A list with the information from the simulation and the states at the tips.
 }
 \description{
-Simulate continuous traits under a lineage-age dependent model
+Similar to 'sim_Mk_budding_exp' function, but simulate continuous traits using a Brownian motion model instead of discrete traits.
+\cr
+This function adds a probability of budding speciation and allows only for a negative relationship between rates of trait evolution and lineage-age. Function also allows for cladogenetic change in the trait (a deterministic change in the state of the trait after budding speciation happens).
+\cr
+MOTHER LINEAGES: The user can set the 'budding_mother' parameter to control the fecundity of mother lineages. If 'budding_mother' is NA, then mother lineages will appear stochastic given the global probability of budding speciation events controlled by the 'budding_prob' argument. If 'budding_mother' is 0.0, then mother lineages will have only a single daughter lineage and the next speciation event will always be a symmetric speciation. If 'budding_mother' is set to 1.0, then once a budding speciation happens the surviving will always survive the speciation event and the descendant nodes will never represent symmetric speciation events. Intermediate values can be used to set intermediate scenarios.
 }
