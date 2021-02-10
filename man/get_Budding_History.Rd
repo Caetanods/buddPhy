@@ -4,10 +4,10 @@
 \alias{get_Budding_History}
 \title{Extract budding history from simulations}
 \usage{
-get_Budding_History(sim_Mk)
+get_Budding_History(sim)
 }
 \arguments{
-\item{sim_Mk}{A simulation object generated with 'sim_Mk_budding_exp'}
+\item{sim}{A simulation object generated with 'sim_Mk_budding_exp', 'sim_Mk_trace_history', 'sim_BM_budding_exp', or 'sim_BM_trace_history'.}
 }
 \value{
 a list. budd_nodes are the nodes representing budding speciation events. budd_edges is an index, in the same order of phy$edge, selecting all branches belonging to mother lineages. A mother lineage is a lineage that survived one or more speciation events (because of budding).

@@ -239,22 +239,29 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
 #'
 #' This function can be used to extract the history of budding events across the branches and nodes of the tree.
 #'
-#' @param sim_Mk A simulation object generated with 'sim_Mk_budding_exp'
+#' @param sim A simulation object generated with 'sim_Mk_budding_exp', 'sim_Mk_trace_history', 'sim_BM_budding_exp', or 'sim_BM_trace_history'.
 #'
 #' @return a list. budd_nodes are the nodes representing budding speciation events. budd_edges is an index, in the same order of phy$edge, selecting all branches belonging to mother lineages. A mother lineage is a lineage that survived one or more speciation events (because of budding).
 #' @export
-get_Budding_History <- function(sim_Mk){
+get_Budding_History <- function(sim){
     ## The budd_nodes show each node that a budding speciation event happened.
     ## The budd_edges marks all edges with a mother lineage (lineages that survived at least one speciation event.
-    budd_lineages <- unique( sim_Mk$ancestry[duplicated(sim_Mk$ancestry)] )
+    budd_lineages <- unique( sim$ancestry[duplicated(sim$ancestry)] )
     budd_nodes <- vector(mode = "numeric")
-    budd_edges <- rep(x = FALSE, times = length(sim_Mk$ancestry) )
+    budd_edges <- rep(x = FALSE, times = length(sim$ancestry) )
+    if( "simmap" %in% names(sim) ){
+        edge_mat <- sim$simmap$edge
+    } else if( "contsim" %in% names(sim) ){
+        edge_mat <- sim$contsim$edge
+    } else{
+        stop( "Check if 'sim' is the correct object!" )
+    }
     for( i in budd_lineages ){
-        anc_id <- sim_Mk$ancestry == i
+        anc_id <- sim$ancestry == i
         budd_edges <- anc_id | budd_edges ## This will update the budd_edges correctly.
-        budd_id_nd <- duplicated( c( sim_Mk$simmap$edge[anc_id,] ) )
+        budd_id_nd <- duplicated( c( edge_mat[anc_id,] ) )
         budd_nodes <- append(x = budd_nodes
-                             , values = c( sim_Mk$simmap$edge[anc_id,] )[budd_id_nd]
+                             , values = c( edge_mat[anc_id,] )[budd_id_nd]
                              , after = length(budd_nodes) )
     }
     return( list(budd_nodes = budd_nodes, budd_edges = budd_edges) )
