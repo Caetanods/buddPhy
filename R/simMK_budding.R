@@ -214,6 +214,8 @@ sim_Mk_budding_exp <- function(tree, Q, anc = NULL, budding_prob = 0.0, budding_
     x <- as.factor( setNames(object = xx_temp, nm = tt$tip.label) )
 
     ## Make the mapped.edge to complete to simmap object.
+    mapped.edge <- matrix(0, nrow = nrow(tt$edge), ncol = ncol(Q)
+                          , dimnames = list(paste(tt$edge[,1],",",tt$edge[,2],sep=""), ss))
     for(w in 1:length(maps) ){
         for(k in 1:length(maps[[w]]) ){
             mapped.edge[w,names(maps[[w]])[k]] <- mapped.edge[w,names(maps[[w]])[k]] + maps[[w]][k]
