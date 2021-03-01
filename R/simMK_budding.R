@@ -313,7 +313,8 @@ get_edge_color_lineages <- function(simMK, base_color = "gray"){
     } else{
         mother_palette <- sample(x = color_pool, size = length(mother_lineages), replace = FALSE)
     }
-    edge_colors <- rep(base_color, times = nrow(simMK$simmap$edge) )
+    ## simMK$edge_state works for both MK and BM based simulations.
+    edge_colors <- rep(base_color, times = nrow(simMK$edge_state) )
     for( mm in 1:length(mother_lineages) ){
         edge_colors[ simMK$ancestry == mother_lineages[mm] ] <- mother_palette[mm]
     }
@@ -346,7 +347,14 @@ get_des_scaler <- function(scaler, id){
 #' @importFrom ape plot.phylo
 plot_mother_lineages <- function(sim_obj, background_color = "gray", edge_width = 3, no_margin = TRUE){
     edge_colors <- get_edge_color_lineages(simMK = sim_obj, base_color = background_color)
-    plot.phylo(x = sim_obj$simmap, edge.color = edge_colors, edge.width = edge_width, no.margin = no_margin)
+    if( "simmap" %in% names(sim_obj) ){
+        phy <- sim_obj$simmap
+    } else if( "contsim" %in% names(sim_obj) ){
+        phy <- sim_obj$contsim
+    } else{
+        stop("Wrong object format.")
+    }
+    plot.phylo(x = phy, edge.color = edge_colors, edge.width = edge_width, no.margin = no_margin)
 }
 
 #' Make stochastic map with rate scalers
