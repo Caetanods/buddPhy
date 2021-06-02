@@ -10,7 +10,9 @@ sim_BM_trace_history(
   anc = 0,
   change_rate = 2,
   decay_fn = TRUE,
-  jump_size = NA
+  jump_size = NA,
+  jump_type = "fixed",
+  jump_all = FALSE
 )
 }
 \arguments{
@@ -24,11 +26,20 @@ sim_BM_trace_history(
 
 \item{decay_fn}{TRUE or FALSE. If TRUE, then the rate of trait evolution has a negative (exponential) relationship with lineage-age. If FALSE, then this relationship becomes positive.}
 
-\item{jump_size}{controls the size of the cladogenetic change associated with budding speciation. The new lineage will have an average trait value shifted by a proportion equal to 'jump_size'. For example, 'jump_size = 0.5' will cause the new lineages to start with an average trait value equal to 50\% above or below the current trait value. Setting to NA (default) will turn-off the option of cladogenetic trait changes.}
+\item{jump_size}{controls the size of the cladogenetic change associated with budding speciation. Setting to NA (default) will turn-off the option of cladogenetic trait changes. If 'jump_type' is "fixed" then 'jump_size' is a proportion of the current trait value. If 'jump_type' is "gaussian", then 'jump_size' is the standard variation of a normal (Gaussian) distribution with mean equal to the current trait value and standard deviation equal to 'jump_size'.}
+
+\item{jump_type}{if the phenotype jump at nodes should be "fixed" or "gaussian". See Details.}
+
+\item{jump_all}{if jumps in the phenotype value should occur in all new lineages or only in new species originated from a mother lineage. See Details.}
 }
 \value{
 A list with the information from the simulation and the states at the tips.
 }
 \description{
 This function simulates continuous traits based on the same lineage history created when using 'sim_BM_budding_exp'. It is useful to simulate under the same lineage history and phylogenetic tree while changing rate parameters or parameter for the decay function. If you don't want to retain a particular lineage history, then please refer to 'sim_BM_budding_exp'.
+}
+\details{
+If 'jump_type' is set to "fixed", then each jump of character value at the node will be an increase or decrease of a fixed proportion of the value at that node. The proportion is controlled with the argument "jump_size". For example, 'jump_size = 0.5' will cause the new lineages to start with an average trait value equal to 50\% above or below the current trait value. On the other hand, if 'jump_type' is of type "gaussian", the jump in character state will be sampled from a normal distribution with mean equal to the current trait value and standard deviation (sd) equal to 'jump_size'.
+
+The parameter 'jump_all' controls the concept of new lineage. If set to TRUE, then a branching event which produces a new lineage will be followed by a jump on the phenotype value. For example, if a symmetric speciation event takes place, then both descendants are new lineages and both jump in the morphospace (controlled by the 'jump_size' and 'jump_type' parameters). If set to FALSE, then jumps in the morphospace associated with the origination of a new lineage occurs only if a budding speciation takes place.
 }

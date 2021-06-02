@@ -186,17 +186,23 @@ sim_BM_budding_exp <- function(tree, sigma, anc = 0.0, budding_prob = 0.0, buddi
 #'
 #' This function simulates continuous traits based on the same lineage history created when using 'sim_BM_budding_exp'. It is useful to simulate under the same lineage history and phylogenetic tree while changing rate parameters or parameter for the decay function. If you don't want to retain a particular lineage history, then please refer to 'sim_BM_budding_exp'.
 #'
+#' If 'jump_type' is set to "fixed", then each jump of character value at the node will be an increase or decrease of a fixed proportion of the value at that node. The proportion is controlled with the argument "jump_size". For example, 'jump_size = 0.5' will cause the new lineages to start with an average trait value equal to 50\% above or below the current trait value. On the other hand, if 'jump_type' is of type "gaussian", the jump in character state will be sampled from a normal distribution with mean equal to the current trait value and standard deviation (sd) equal to 'jump_size'.
+#'
+#' The parameter 'jump_all' controls the concept of new lineage. If set to TRUE, then a branching event which produces a new lineage will be followed by a jump on the phenotype value. For example, if a symmetric speciation event takes place, then both descendants are new lineages and both jump in the morphospace (controlled by the 'jump_size' and 'jump_type' parameters). If set to FALSE, then jumps in the morphospace associated with the origination of a new lineage occurs only if a budding speciation takes place.
+#'
 #' @param sim_BM output from the 'sim_BM_budding_exp'.
 #' @param sigma the base rate for the Brownian-motion model.
 #' @param anc the ancestral state for the trait.
 #' @param change_rate the rate for an exponential reduction of the rate of trait evolution proportional to lineage-age.
 #' @param decay_fn TRUE or FALSE. If TRUE, then the rate of trait evolution has a negative (exponential) relationship with lineage-age. If FALSE, then this relationship becomes positive.
-#' @param jump_size controls the size of the cladogenetic change associated with budding speciation. The new lineage will have an average trait value shifted by a proportion equal to 'jump_size'. For example, 'jump_size = 0.5' will cause the new lineages to start with an average trait value equal to 50\% above or below the current trait value. Setting to NA (default) will turn-off the option of cladogenetic trait changes.
+#' @param jump_size controls the size of the cladogenetic change associated with budding speciation. Setting to NA (default) will turn-off the option of cladogenetic trait changes. If 'jump_type' is "fixed" then 'jump_size' is a proportion of the current trait value. If 'jump_type' is "gaussian", then 'jump_size' is the standard variation of a normal (Gaussian) distribution with mean equal to the current trait value and standard deviation equal to 'jump_size'.
+#' @param jump_type if the phenotype jump at nodes should be "fixed" or "gaussian". See Details.
+#' @param jump_all if jumps in the phenotype value should occur in all new lineages or only in new species originated from a mother lineage. See Details.
 #'
 #' @return A list with the information from the simulation and the states at the tips.
 #' @export
 #' @importFrom ape vcv.phylo reorder.phylo
-sim_BM_trace_history <- function(sim_BM, sigma, anc = 0.0, change_rate = 2.0, decay_fn = TRUE, jump_size = NA){
+sim_BM_trace_history <- function(sim_BM, sigma, anc = 0.0, change_rate = 2.0, decay_fn = TRUE, jump_size = NA, jump_type = "fixed", jump_all = FALSE){
 
     ## This function is very similar to 'sim_BM_budding_exp'. The only difference is that we are not repeating the simulation of the cladogenetic events.
 
@@ -206,6 +212,8 @@ sim_BM_trace_history <- function(sim_BM, sigma, anc = 0.0, change_rate = 2.0, de
 
     ## Check if the jump_size is valid.
     if( is.numeric(jump_size) & jump_size < 0.0 ) stop("jump_size cannot be a negative number.")
+    if( !is.logical(jump_all) ) stop("jump_all needs to be TRUE or FALSE.")
+    jump_type <- match.arg(jump_type, choices=c("fixed", "gaussian"), several.ok=FALSE)
 
     tt <- reorder.phylo(sim_BM$contsim) ## reorder the tree cladewise.
     ## Need a 'maps' list in the same format as 'phytools' 'simmap' object.
@@ -318,6 +326,7 @@ sim_BM_trace_history <- function(sim_BM, sigma, anc = 0.0, change_rate = 2.0, de
                 ## Updates the ancestry, here with its destiny.
                 ANCESTRY[ii] <- DESTINY[ii]
                 ## The mother lineage keeps the same state:
+                ## This is the most important trait of a mother lineage.
                 STATES[mother_lineage_id, 1] <- new
 
                 ## Check if we should make a jump at the new species.
@@ -325,13 +334,33 @@ sim_BM_trace_history <- function(sim_BM, sigma, anc = 0.0, change_rate = 2.0, de
                     STATES[daughter_lineage_id, 1] <- new
                 } else{
                     ## Make the cladogenetic jump.
-                    STATES[daughter_lineage_id, 1] <- new + (sample(x = c(1.0,-1.0), size = 1) * new * jump_size)
+                    if( jump_type == "fixed" ){
+                        STATES[daughter_lineage_id, 1] <- new + (sample(x = c(1.0,-1.0), size = 1) * new * jump_size)
+                    } else if( jump_type == "gaussian" ){
+                        STATES[daughter_lineage_id, 1] <- rnorm(n = 1, mean = new, sd = jump_size)
+                    } else{
+                        stop("Jump type needs to be either fixed or Gaussian.")
+                    }
                 }
 
             } else{
+                ## Not a budding event, two new lineages will be produced.
+                if( jump_all ){
+                    ## All new lineages have a jump.
+                    if( jump_type == "fixed" ){
+                        direction_fix_jump <- sample(x = c(1.0,-1.0), size = length(ii), replace = TRUE)
+                        STATES[ii, 1] <- new + (direction_fix_jump * new * jump_size)
+                    } else if( jump_type == "gaussian" ){
+                        STATES[ii, 1] <- rnorm(n = length(ii), mean = new, sd = jump_size)
+                    } else{
+                        stop("Jump type needs to be either fixed or Gaussian.")
+                    }
+                    ANCESTRY[ii] <- DESTINY[ii]
+                } else{
                 ## Both descendants are new lineages and they share the same state.
                 STATES[ii, 1] <- new
                 ANCESTRY[ii] <- DESTINY[ii]
+                }
             }
 
         }
