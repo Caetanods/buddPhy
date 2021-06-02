@@ -23,7 +23,13 @@ sim_Mk_trace_history <- function(sim_MK, Q, anc = NULL, change_rate = 2.0, decay
 
     ## Define the size of the chunks to be used for the simulation.
     ## Max age helps to deal with non-ultrametric trees.
-    tt <- mergeSimmap(phy = sim_MK$simmap, drop.regimes = TRUE)
+    if( "simmap" %in% names(sim_MK) ){
+        tt <- mergeSimmap(phy = sim_MK$simmap, drop.regimes = TRUE)
+    } else if( "contsim" %in% names(sim_MK) ){
+        tt <- sim_MK$contsim
+    } else {
+        stop( "Incorrect sim_MK object." )
+    }
     chunk_length <- max( diag( vcv.phylo(tt) ) ) / 1000 ## 1000 pieces of tree age.
 
     ## Get the names for the states or return error message if fail.
