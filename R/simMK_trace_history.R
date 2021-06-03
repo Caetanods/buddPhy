@@ -1,25 +1,31 @@
 #' Simulate discrete trait evolution tracing lineage history.
 #'
-#' This function simulates discrete traits based on the same lineage history created when using 'sim_Mk_budding_exp'. It is useful to simulate under the same lineage history and phylogenetic tree while changing rate parameters or parameter for the decay function. If you don't want to retain a particular lineage history, then please refer to 'sim_Mk_budding_exp'.
+#' This function simulates discrete traits based on the same lineage history created when using 'sim_Mk_budding_exp'. It is useful to simulate under the same lineage history and phylogenetic tree while changing rate parameters or parameter for the decay function. If you don't want to retain a particular lineage history, then please refer to 'sim_Mk_budding_exp'. Please also check the help page for 'sim_Mk_budding_exp' to understand how progenitor lineages are simulated.
+#' \cr
+#' CLADOGENETIC CHANGES AT BUDDING: The function allows for state changes at budding nodes. The 'cladogenetic_change' parameter controls whether cladogenetic changes happens and which transition rule should be used. The parameter 'cladogenetic_state' allows for the user to include restrictions to which state should the daughter lineage have after a budding speciation even. Note that anagenetic change is likely to occur along the branches of the tree (dependent on the transition matrix - Q). This means that the state of any lineage at a node can change to another state after time 't'. In the case of the 'convergent_any' and 'convergent_other' options, the convergence happens with respect to the state of the daughter lineage after the first budding speciation event of the progenitor lineage. In other words, the daughter lineage can leave the state of convergence at any time along a branch following the transition matrix (Q).
 #'
 #' @param sim_MK the output from ''sim_Mk_budding_exp'.
 #' @param Q transition matrix for a Markov model.
 #' @param anc state at the root. If "NULL", then a random state is selected.
 #' @param change_rate the rate for an exponential reduction of the rate of trait evolution proportional to lineage-age.
 #' @param decay_fn TRUE or FALSE. If TRUE, then the rate of trait evolution has a negative (exponential) relationship with lineage-age. If FALSE, then this relationship becomes positive.
-#' @param cladogenetic_change if a trait change should occur in the node associated with a budding event. Option are "none": no change, anagenetic changes only; "flat": trait changes randomly; "prob": trait changes following the transition probabilities from the Q matrix.
+#' @param cladogenetic_change if a cladogenetic trait change should occur at the node associated with a budding event. Options are "none": anagenetic changes only; "flat": trait changes randomly; "prob": trait changes following the transition probabilities from the Q matrix.
+#' @param cladogenetic_state the state of the daughter lineage after a cladogenetic event. Options are "any": cladogenetic changes can change to any state; "other": always change to a state distinct from the state of the progenitor lineage at the moment of speciation; "convergent_any": same as "any", but all subsequent daughter lineages of the same progenitor will converge to the state of the first daughter at the time of its origin; "convergent_other": same as "other", but all subsequent daughter lineages will converge to the state of the first daughter at the time of its origin. This parameter is ignored if 'cladogenetic_change = "none"'.
 #'
 #' @return A list with simmap, tip_state, edge_state, ancestry, rate_scaler, and scaler_mat.
 #' @export
 #' @importFrom ape vcv.phylo reorder.phylo
 #' @importFrom expm expm
 #' @importFrom ratematrix mergeSimmap
-sim_Mk_trace_history <- function(sim_MK, Q, anc = NULL, change_rate = 2.0, decay_fn = TRUE, cladogenetic_change = "none"){
+sim_Mk_trace_history <- function(sim_MK, Q, anc = NULL, change_rate = 2.0, decay_fn = TRUE, cladogenetic_change = "none", cladogenetic_state = "any"){
 
     ## Check for the cladogenetic options:
     cladogenetic_change <- match.arg(arg = cladogenetic_change
                                      , choices=c("none","flat", "prob")
                                      , several.ok = FALSE)
+    cladogenetic_state <- match.arg(arg = cladogenetic_state
+                                    , choices=c("any", "other", "convergent_any","convergent_other")
+                                    , several.ok = FALSE)
 
     ## Define the size of the chunks to be used for the simulation.
     ## Max age helps to deal with non-ultrametric trees.
@@ -59,6 +65,11 @@ sim_Mk_trace_history <- function(sim_MK, Q, anc = NULL, change_rate = 2.0, decay
 
     ## For each edge of the tree we need a number to keep track of the lineage.
     ANCESTRY <- vector(mode = "numeric", length = nrow(tt$edge) )
+
+    ## For each lineage we might need to track the state of the daughter.
+    ## The lineage ancestry remains the same, but the trait history can change.
+    ## Daughter state of lineage i is DAUGHTER_STATE[i]:
+    DAUGHTER_STATE <- rep(NA, times = nrow(tt$edge)) ## Maximum of lineages is the number of edges.
 
     ## However, here we already know the history of all lineages. We need to track this history instead of creating a new one. So here we define DESTINY:
     DESTINY <- sim_MK$ancestry ## The object from the previous simulation.
@@ -173,23 +184,92 @@ sim_Mk_trace_history <- function(sim_MK, Q, anc = NULL, change_rate = 2.0, decay
                 ## The mother lineage keeps the same state:
                 STATES[mother_lineage_id, 1] <- new
 
-                ## Check if we make a cladogenetic change to the trait:
-                if( cladogenetic_change == "flat" ){
-                    ## Have a deterministic change in the state at the budding speciation event.
-                    ## If binary trait, then bounce to the other state.
-                    budd_states <- ss[ ss != new ] ## Any of the other states.
-                    STATES[daughter_lineage_id, 1] <- sample(x = budd_states, size = 1)
-                } else if( cladogenetic_change == "prob" ){
-                    ## Change the trait state using the prob from the Q transition matrix.
-                    row_sub <- ss == new
-                    col_sub <- !row_sub
-                    prob_shift <- Q[row_sub, col_sub] / sum( Q[row_sub, col_sub] )
-                    STATES[daughter_lineage_id, 1] <- sample(x = ss[col_sub], prob = prob_shift, size = 1)
+                ## Check if this is the first time this lineage budds:
+                if( is.na(DAUGHTER_STATE[ANCESTRY[j]]) ){
+                    ## First daughter of progenitor lineage. A new state will always be sampled.
+                    ## Check if we make a cladogenetic change to the trait:
+                    if( cladogenetic_change == "flat" ){
+                        ## Have a deterministic change in the state at the budding speciation event.
+                        ## If binary trait, then bounce to the other state.
+                        if( cladogenetic_state %in% c("any", "convergent_any") ){
+                            ## Sample any state, even the same state.
+                            STATES[daughter_lineage_id, 1] <- sample(x = ss, size = 1)
+                            DAUGHTER_STATE[ANCESTRY[j]] <- STATES[daughter_lineage_id, 1]
+                        } else{
+                            ## Sample any of the other states. Cannot be the same.
+                            budd_states <- ss[ ss != new ] ## Any of the other states.
+                            STATES[daughter_lineage_id, 1] <- sample(x = budd_states, size = 1)
+                            DAUGHTER_STATE[ANCESTRY[j]] <- STATES[daughter_lineage_id, 1]
+                        }
+                    } else if( cladogenetic_change == "prob" ){
+                        ## Change the trait state using the prob from the Q transition matrix.
+                        if( cladogenetic_state %in% c("any", "convergent_any") ){
+                            ## Sample any state, even the same state.
+                            row_sub <- ss == new
+                            prob_shift <- Q[row_sub, ] / sum( Q[row_sub, ] )
+                            STATES[daughter_lineage_id, 1] <- sample(x = ss, prob = prob_shift, size = 1)
+                            DAUGHTER_STATE[ANCESTRY[j]] <- STATES[daughter_lineage_id, 1]
+                        } else{
+                            ## Cannot sample the same state. Sample another state.
+                            row_sub <- ss == new
+                            col_sub <- !row_sub
+                            prob_shift <- Q[row_sub, col_sub] / sum( Q[row_sub, col_sub] )
+                            STATES[daughter_lineage_id, 1] <- sample(x = ss[col_sub], prob = prob_shift, size = 1)
+                            DAUGHTER_STATE[ANCESTRY[j]] <- STATES[daughter_lineage_id, 1]
+                        }
+                    } else{
+                        ## Don't change the trait at the node.
+                        STATES[daughter_lineage_id, 1] <- new
+                        DAUGHTER_STATE[ANCESTRY[j]] <- STATES[daughter_lineage_id, 1]
+                    }
                 } else{
-                    ## Don't change the trait. No special event at cladogenesis.
-                    STATES[daughter_lineage_id, 1] <- new
-                }
+                    ## Old progenitor.
+                    ## If convergent, then new state will not be sampled and daughter will have DAUGHTER_STATE[i] state.
+                    ## Check if we make a cladogenetic change to the trait:
 
+                    if( cladogenetic_change == "flat" ){
+                        ## Have a deterministic change in the state at the budding speciation event.
+                        ## If binary trait, then bounce to the other state.
+                        if( cladogenetic_state %in% c("convergent_any","convergent_other") ){
+                            ## Same state as the DAUGHTER_STATE for the progenitor lineage.
+                            ## The "any" or "other" part has been taken care before.
+                            STATES[daughter_lineage_id, 1] <- DAUGHTER_STATE[ANCESTRY[j]]
+                        } else if( cladogenetic_state == "any" ) {
+                            ## If not convergent, then do the sampling again. Any state is valid.
+                            STATES[daughter_lineage_id, 1] <- sample(x = ss, size = 1)
+                            DAUGHTER_STATE[ANCESTRY[j]] <- STATES[daughter_lineage_id, 1]
+                        } else{
+                            ## Not convergent, but the same state is not valid.
+                            budd_states <- ss[ ss != new ]
+                            STATES[daughter_lineage_id, 1] <- sample(x = budd_states, size = 1)
+                            DAUGHTER_STATE[ANCESTRY[j]] <- STATES[daughter_lineage_id, 1]
+                        }
+                    } else if( cladogenetic_change == "prob" ){
+                        ## Change the trait state using the prob from the Q transition matrix.
+                        if( cladogenetic_state %in% c("convergent_any","convergent_other") ){
+                            ## Same state as the DAUGHTER_STATE for the progenitor lineage.
+                            ## The "any" or "other" part has been taken care before.
+                            STATES[daughter_lineage_id, 1] <- DAUGHTER_STATE[ANCESTRY[j]]
+                        } else if( cladogenetic_state == "any" ) {
+                            ## Any state is valid. Not convergent, sample again.
+                            row_sub <- ss == new
+                            prob_shift <- Q[row_sub, ] / sum( Q[row_sub, ] )
+                            STATES[daughter_lineage_id, 1] <- sample(x = ss, prob = prob_shift, size = 1)
+                            DAUGHTER_STATE[ANCESTRY[j]] <- STATES[daughter_lineage_id, 1]
+                        } else{
+                            ## Cannot be the same state. Not convergent, sample again.
+                            row_sub <- ss == new
+                            col_sub <- !row_sub
+                            prob_shift <- Q[row_sub, col_sub] / sum( Q[row_sub, col_sub] )
+                            STATES[daughter_lineage_id, 1] <- sample(x = ss[col_sub], prob = prob_shift, size = 1)
+                            DAUGHTER_STATE[ANCESTRY[j]] <- STATES[daughter_lineage_id, 1]
+                        }
+                    } else{
+                        ## Don't change the trait at the node.
+                        STATES[daughter_lineage_id, 1] <- new
+                        DAUGHTER_STATE[ANCESTRY[j]] <- STATES[daughter_lineage_id, 1]
+                    }
+                }
             } else{
                 ## Both descendants are new lineages and they share the same state.
                 STATES[ii, 1] <- new
@@ -222,7 +302,15 @@ sim_Mk_trace_history <- function(sim_MK, Q, anc = NULL, change_rate = 2.0, decay
     ## Temporary object to return the rate scalers.
     colnames( mat_scaler ) <- c("new_lineage", "age", "chunk_length", "scaler")
 
+    ## If not convergent, then this vector is not important.
+    if( cladogenetic_state %in% c("any", "other") ){
+        DAUGHTER_STATE_MAT <- NA
+    } else{
+        DAUGHTER_STATE_MAT <- data.frame( lineage = 1:length(DAUGHTER_STATE), daughter_state = DAUGHTER_STATE )
+        DAUGHTER_STATE_MAT <- DAUGHTER_STATE_MAT[ !is.na(DAUGHTER_STATE) ,]
+    }
+
     return( list(simmap = tt, tip_state = x, edge_state = STATES
                  , ancestry = ANCESTRY, rate_scaler_maps = SCALER
-                 , scaler_mat = mat_scaler) )
+                 , scaler_mat = mat_scaler, daughter_state = DAUGHTER_STATE_MAT) )
 }

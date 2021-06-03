@@ -12,7 +12,8 @@ sim_Mk_budding_exp(
   budding_mother = NA,
   change_rate = 2,
   decay_fn = TRUE,
-  cladogenetic_change = "none"
+  cladogenetic_change = "none",
+  cladogenetic_state = "any"
 )
 }
 \arguments{
@@ -24,13 +25,15 @@ sim_Mk_budding_exp(
 
 \item{budding_prob}{probability that the speciation event was budding.}
 
-\item{budding_mother}{autocorrelation of budding events. If NA, then no autocorrelation happens and the occurrence of budding speciation will always follow the same probability of 'budding_prob'. If 'budding_mother' is non-zero, then the probability that the mother lineage will generate another new lineage through a budding speciation event (and, thus, survive another speciation event) will be given by 'budding_mother' instead. The probability of the next budding event after a symmetrical speciation event will reset to 'budding_prob'.}
+\item{budding_mother}{autocorrelation of budding events. If NA, then no autocorrelation happens and the occurrence of budding speciation will follow 'budding_prob'. If 'budding_mother' is non-zero, then the probability that the progenitor lineage will undergo a budding speciation after the first will be given by 'budding_mother'. After any symmetrical speciation event the probability of a budding event will always be 'budding_prob'.}
 
 \item{change_rate}{the rate for an exponential reduction of the rate of trait evolution proportional to lineage-age.}
 
-\item{decay_fn}{TRUE or FALSE. If TRUE, then the rate of trait evolution has a negative (exponential) relationship with lineage-age. If FALSE, then this relationship becomes positive.}
+\item{decay_fn}{TRUE or FALSE. If TRUE, then the rate of trait evolution has a negative (exponential) relationship with lineage-age. TRUE is the only option at the moment.}
 
-\item{cladogenetic_change}{if a trait change should occur in the node associated with a budding event. Option are "none": no change, anagenetic changes only; "flat": trait changes randomly; "prob": trait changes following the transition probabilities from the Q matrix.}
+\item{cladogenetic_change}{if a cladogenetic trait change should occur at the node associated with a budding event. Options are "none": anagenetic changes only; "flat": trait changes randomly; "prob": trait changes following the transition probabilities from the Q matrix.}
+
+\item{cladogenetic_state}{the state of the daughter lineage after a cladogenetic event. Options are "any": cladogenetic changes can change to any state; "other": always change to a state distinct from the state of the progenitor lineage at the moment of speciation; "convergent_any": same as "any", but all subsequent daughter lineages of the same progenitor will converge to the state of the first daughter at the time of its origin; "convergent_other": same as "other", but all subsequent daughter lineages will converge to the state of the first daughter at the time of its origin. This parameter is ignored if 'cladogenetic_change = "none"'.}
 }
 \value{
 A list with simmap, tip_state, edge_state, ancestry, rate_scaler, and scaler_mat.
@@ -38,5 +41,7 @@ A list with simmap, tip_state, edge_state, ancestry, rate_scaler, and scaler_mat
 \description{
 This function adds a probability of budding speciation and allows only for a negative relationship between rates of trait evolution and lineage-age. Function also allows for cladogenetic change in the trait (a deterministic change in the state of the trait after budding speciation happens).
 \cr
-MOTHER LINEAGES: The user can set the 'budding_mother' parameter to control the fecundity of mother lineages. If 'budding_mother' is NA, then mother lineages will appear stochastic given the global probability of budding speciation events controlled by the 'budding_prob' argument. If 'budding_mother' is 0.0, then mother lineages will have only a single daughter lineage and the next speciation event will always be a symmetric speciation. If 'budding_mother' is set to 1.0, then once a budding speciation happens the surviving will always survive the speciation event and the descendant nodes will never represent symmetric speciation events. Intermediate values can be used to set intermediate scenarios.
+PROGENITOR LINEAGES: The user can set the 'budding_mother' parameter to control the fecundity of progenitor lineages. If 'budding_mother' is NA, then progenitor lineages will appear stochastictly given the global probability of budding speciation events controlled by the 'budding_prob' argument. If 'budding_mother' is 0.0, then mother lineages will have only a single daughter lineage and the next speciation event will always be a symmetric speciation event. If 'budding_mother' is set to 1.0, then once a budding speciation happens the surviving lineage will always survive the speciation event and the descendant nodes will never represent symmetric speciation events. Intermediate values can be used to set intermediate scenarios.
+\cr
+CLADOGENETIC CHANGES AT BUDDING: The function allows for state changes at budding nodes. The 'cladogenetic_change' parameter controls whether cladogenetic changes happens and which transition rule should be used. The parameter 'cladogenetic_state' allows for the user to include restrictions to which state should the daughter lineage have after a budding speciation even. Note that anagenetic change is likely to occur along the branches of the tree (dependent on the transition matrix - Q). This means that the state of any lineage at a node can change to another state after time 't'. In the case of the 'convergent_any' and 'convergent_other' options, the convergence happens with respect to the state of the daughter lineage after the first budding speciation event of the progenitor lineage. In other words, the daughter lineage can leave the state of convergence at any time along a branch following the transition matrix (Q).
 }

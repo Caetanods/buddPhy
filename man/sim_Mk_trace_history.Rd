@@ -10,7 +10,8 @@ sim_Mk_trace_history(
   anc = NULL,
   change_rate = 2,
   decay_fn = TRUE,
-  cladogenetic_change = "none"
+  cladogenetic_change = "none",
+  cladogenetic_state = "any"
 )
 }
 \arguments{
@@ -24,11 +25,15 @@ sim_Mk_trace_history(
 
 \item{decay_fn}{TRUE or FALSE. If TRUE, then the rate of trait evolution has a negative (exponential) relationship with lineage-age. If FALSE, then this relationship becomes positive.}
 
-\item{cladogenetic_change}{if a trait change should occur in the node associated with a budding event. Option are "none": no change, anagenetic changes only; "flat": trait changes randomly; "prob": trait changes following the transition probabilities from the Q matrix.}
+\item{cladogenetic_change}{if a cladogenetic trait change should occur at the node associated with a budding event. Options are "none": anagenetic changes only; "flat": trait changes randomly; "prob": trait changes following the transition probabilities from the Q matrix.}
+
+\item{cladogenetic_state}{the state of the daughter lineage after a cladogenetic event. Options are "any": cladogenetic changes can change to any state; "other": always change to a state distinct from the state of the progenitor lineage at the moment of speciation; "convergent_any": same as "any", but all subsequent daughter lineages of the same progenitor will converge to the state of the first daughter at the time of its origin; "convergent_other": same as "other", but all subsequent daughter lineages will converge to the state of the first daughter at the time of its origin. This parameter is ignored if 'cladogenetic_change = "none"'.}
 }
 \value{
 A list with simmap, tip_state, edge_state, ancestry, rate_scaler, and scaler_mat.
 }
 \description{
-This function simulates discrete traits based on the same lineage history created when using 'sim_Mk_budding_exp'. It is useful to simulate under the same lineage history and phylogenetic tree while changing rate parameters or parameter for the decay function. If you don't want to retain a particular lineage history, then please refer to 'sim_Mk_budding_exp'.
+This function simulates discrete traits based on the same lineage history created when using 'sim_Mk_budding_exp'. It is useful to simulate under the same lineage history and phylogenetic tree while changing rate parameters or parameter for the decay function. If you don't want to retain a particular lineage history, then please refer to 'sim_Mk_budding_exp'. Please also check the help page for 'sim_Mk_budding_exp' to understand how progenitor lineages are simulated.
+\cr
+CLADOGENETIC CHANGES AT BUDDING: The function allows for state changes at budding nodes. The 'cladogenetic_change' parameter controls whether cladogenetic changes happens and which transition rule should be used. The parameter 'cladogenetic_state' allows for the user to include restrictions to which state should the daughter lineage have after a budding speciation even. Note that anagenetic change is likely to occur along the branches of the tree (dependent on the transition matrix - Q). This means that the state of any lineage at a node can change to another state after time 't'. In the case of the 'convergent_any' and 'convergent_other' options, the convergence happens with respect to the state of the daughter lineage after the first budding speciation event of the progenitor lineage. In other words, the daughter lineage can leave the state of convergence at any time along a branch following the transition matrix (Q).
 }
